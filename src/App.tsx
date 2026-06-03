@@ -456,6 +456,70 @@ function App() {
                 />
                 <label htmlFor="showProgress">显示上传进度</label>
               </div>
+              
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="enableSchedule"
+                  checked={configForm.upload.schedule?.enabled || false}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { 
+                      ...configForm.upload, 
+                      schedule: {
+                        enabled: e.target.checked,
+                        start_time: configForm.upload.schedule?.start_time || "03:00",
+                        end_time: configForm.upload.schedule?.end_time || "07:00",
+                      }
+                    }
+                  })}
+                />
+                <label htmlFor="enableSchedule">启用定时上传</label>
+              </div>
+              
+              {(configForm.upload.schedule?.enabled || false) && (
+                <div className="schedule-settings">
+                  <div className="form-group">
+                    <label>开始时间:</label>
+                    <input
+                      type="time"
+                      value={configForm.upload.schedule?.start_time || "03:00"}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { 
+                          ...configForm.upload, 
+                          schedule: {
+                            enabled: configForm.upload.schedule?.enabled || false,
+                            start_time: e.target.value,
+                            end_time: configForm.upload.schedule?.end_time || "07:00",
+                          }
+                        }
+                      })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>结束时间:</label>
+                    <input
+                      type="time"
+                      value={configForm.upload.schedule?.end_time || "07:00"}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { 
+                          ...configForm.upload, 
+                          schedule: {
+                            enabled: configForm.upload.schedule?.enabled || false,
+                            start_time: configForm.upload.schedule?.start_time || "03:00",
+                            end_time: e.target.value,
+                          }
+                        }
+                      })}
+                    />
+                  </div>
+                  <div className="schedule-notice">
+                    ℹ️ 到开始时间自动上传，到结束时间等待当前任务完成后停止
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="settings-section">

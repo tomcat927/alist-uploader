@@ -243,6 +243,28 @@ button.disabled {
   cursor: not-allowed;
 }
 
+/* Schedule Settings */
+.schedule-settings {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--bg-color);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.schedule-settings .form-group {
+  margin-bottom: 0.75rem;
+}
+
+.schedule-notice {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #e3f2fd;
+  border-radius: 4px;
+  color: #1565c0;
+  font-size: 0.875rem;
+}
+
 button {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border-color);

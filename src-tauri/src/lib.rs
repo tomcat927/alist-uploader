@@ -7,14 +7,21 @@ pub mod utils;
 pub fn run() {
     use std::sync::Arc;
 
+    let queue_manager = crate::services::queue_manager::QueueManager::new()
+        .expect("无法初始化队列管理器");
+    let queue_manager_arc = Arc::new(queue_manager);
+
+    // 启动定时任务监控
+    let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(queue_manager_arc.clone_inner());
+    tokio::spawn(async move {
+        schedule_manager.start_schedule_monitor().await;
+    });
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .manage(
-            crate::services::queue_manager::QueueManager::new()
-                .expect("无法初始化队列管理器"),
-        )
+        .manage(queue_manager_arc)
         .invoke_handler(tauri::generate_handler![
             crate::commands::get_queue,
             crate::commands::add_to_queue,

@@ -36,6 +36,12 @@ export interface DirItem {
   sign?: string;
 }
 
+export interface ScheduledUpload {
+  enabled: boolean;
+  start_time: string;
+  end_time: string;
+}
+
 export interface UploadConfig {
   concurrency: number;
   max_retries: number;
@@ -44,6 +50,7 @@ export interface UploadConfig {
     strategy: string;
   };
   show_progress: boolean;
+  schedule?: ScheduledUpload;
 }
 
 export interface HistoryConfig {

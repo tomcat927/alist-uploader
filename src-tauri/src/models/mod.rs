@@ -137,12 +137,30 @@ impl Default for FileExistsStrategy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduledUpload {
+    pub enabled: bool,
+    pub start_time: String, // "HH:MM" format
+    pub end_time: String,   // "HH:MM" format
+}
+
+impl Default for ScheduledUpload {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            start_time: "03:00".to_string(),
+            end_time: "07:00".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadConfig {
     pub concurrency: u8,
     pub max_retries: u32,
     pub as_task: bool,
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
+    pub schedule: Option<ScheduledUpload>,
 }
 
 impl Default for UploadConfig {
