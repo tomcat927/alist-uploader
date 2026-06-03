@@ -270,11 +270,13 @@ pub struct ListResp {
     pub content: Vec<DirItem>,
 }
 
-#[derive(Debug, serde::Deserialize, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DirItem {
     pub name: String,
-    pub size: i64,
+    pub size: u64,
     pub is_dir: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sign: Option<String>,
 }

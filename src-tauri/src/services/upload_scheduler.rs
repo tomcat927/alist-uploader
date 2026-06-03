@@ -100,9 +100,28 @@ impl UploadScheduler {
                 let config = queue_manager.config.read().await;
                 let max_retries = config.upload.max_retries;
                 if task.retry_count >= max_retries {
-                    task.mark_failed(e);
+                    task.mark_failed(e.clone());
                     let _ = queue_manager.add_to_history(task.clone()).await;
                     let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
+                    
+                    let _ = queue_manager.mark_queue_failed(task.file.name.clone(), e.clone()).await;
+                    
+                    // 发送通知
+                    let app_config = queue_manager.config.read().await;
+                    if let Some(notification) = &app_config.upload.notification {
+                        if notification.enabled && !notification.webhook_url.is_empty() {
+                            Self::send_failure_notification(
+                                &task.file.name,
+                                &e,
+                                notification,
+                            ).await;
+                        }
+                    }
+                    drop(app_config);
+                    
+                    // 停止整个队列
+                    queue_manager.set_uploading(false);
+                    queue_manager.set_stop_after_current(true);
                 } else {
                     drop(config);
                     task.increment_retry();
@@ -121,6 +140,74 @@ impl UploadScheduler {
         match alist_client.upload_file(&task.file.path, &task.alist_path, config.as_task).await {
             Ok(_) => Ok(()),
             Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn send_failure_notification(
+        file_name: &str,
+        error: &str,
+        notification: &NotificationConfig,
+    ) {
+        for channel in &notification.channels {
+            match channel.as_str() {
+                "feishu" => {
+                    Self::send_feishu_notification(
+                        &notification.webhook_url,
+                        file_name,
+                        error,
+                    ).await;
+                }
+                _ => {
+                    log::warn!("不支持的通知渠道: {}", channel);
+                }
+            }
+        }
+    }
+
+    async fn send_feishu_notification(
+        webhook_url: &str,
+        file_name: &str,
+        error: &str,
+    ) {
+        let message = format!(
+            "## 上传失败通知\n\n\
+            **文件**: {}\n\
+            **错误**: {}\n\
+            **状态**: 队列已停止，等待人工处理\n\n\
+            _请检查文件路径、Alist 服务状态或网络连接_",
+            file_name, error
+        );
+
+        let payload = serde_json::json!({
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": "上传失败通知"
+                    },
+                    "template": "red"
+                },
+                "elements": [{
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": message
+                    }
+                }]
+            }
+        });
+
+        if let Err(e) = reqwest::Client::new()
+            .post(webhook_url)
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .send()
+            .await
+        {
+            log::error!("发送飞书通知失败: {}", e);
+        } else {
+            log::info!("飞书通知发送成功");
         }
     }
 

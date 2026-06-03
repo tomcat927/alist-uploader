@@ -161,6 +161,7 @@ pub struct UploadConfig {
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
     pub schedule: Option<ScheduledUpload>,
+    pub notification: Option<NotificationConfig>,
 }
 
 impl Default for UploadConfig {
@@ -171,6 +172,25 @@ impl Default for UploadConfig {
             as_task: true,
             file_exists_strategy: FileExistsStrategy::default(),
             show_progress: false,
+            schedule: Some(ScheduledUpload::default()),
+            notification: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationConfig {
+    pub enabled: bool,
+    pub webhook_url: String,
+    pub channels: Vec<String>, // "feishu", "dingtalk", etc.
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            webhook_url: String::new(),
+            channels: vec!["feishu".to_string()],
         }
     }
 }

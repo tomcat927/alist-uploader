@@ -42,6 +42,12 @@ export interface ScheduledUpload {
   end_time: string;
 }
 
+export interface NotificationConfig {
+  enabled: boolean;
+  webhook_url: string;
+  channels: string[];
+}
+
 export interface UploadConfig {
   concurrency: number;
   max_retries: number;
@@ -51,6 +57,7 @@ export interface UploadConfig {
   };
   show_progress: boolean;
   schedule?: ScheduledUpload;
+  notification?: NotificationConfig;
 }
 
 export interface HistoryConfig {

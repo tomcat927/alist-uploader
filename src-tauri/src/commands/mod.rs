@@ -180,11 +180,13 @@ pub async fn alist_login(
 }
 
 #[tauri::command]
-pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<Vec<DirItem>, String> {
+pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<String, String> {
     let client = AlistClient::new(config.alist.base_url, config.alist.token);
     
-    client
+    let items = client
         .list_directory(&path)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    
+    Ok(serde_json::to_string(&items).unwrap_or_default())
 }

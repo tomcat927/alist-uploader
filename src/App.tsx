@@ -460,6 +460,53 @@ function App() {
               <div className="form-group checkbox-group">
                 <input
                   type="checkbox"
+                  id="enableNotification"
+                  checked={configForm.upload.notification?.enabled || false}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { 
+                      ...configForm.upload, 
+                      notification: {
+                        enabled: e.target.checked,
+                        webhook_url: configForm.upload.notification?.webhook_url || "",
+                        channels: configForm.upload.notification?.channels || ["feishu"],
+                      }
+                    }
+                  })}
+                />
+                <label htmlFor="enableNotification">启用失败通知</label>
+              </div>
+              
+              {(configForm.upload.notification?.enabled || false) && (
+                <div className="notification-settings">
+                  <div className="form-group">
+                    <label>Webhook URL:</label>
+                    <input
+                      type="text"
+                      placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
+                      value={configForm.upload.notification?.webhook_url || ""}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { 
+                          ...configForm.upload, 
+                          notification: {
+                            enabled: configForm.upload.notification?.enabled || false,
+                            webhook_url: e.target.value,
+                            channels: configForm.upload.notification?.channels || ["feishu"],
+                          }
+                        }
+                      })}
+                    />
+                  </div>
+                  <div className="notification-notice">
+                    ℹ️ 当文件上传失败超过重试阈值时，将发送通知并停止队列
+                  </div>
+                </div>
+              )}
+              
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
                   id="enableSchedule"
                   checked={configForm.upload.schedule?.enabled || false}
                   onChange={(e) => setConfigForm({

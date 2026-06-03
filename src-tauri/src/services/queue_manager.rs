@@ -142,6 +142,19 @@ impl QueueManager {
     pub fn set_stop_after_current(&self, value: bool) {
         self.stop_after_current.store(value, Ordering::SeqCst);
     }
-}
 
-use std::sync::atomic::{AtomicBool, Ordering};
+    pub async fn mark_queue_failed(
+        &self,
+        file_name: String,
+        error: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // 记录失败信息到日志
+        log::error!(
+            "队列因文件 '{}' 失败而停止: {}",
+            file_name,
+            error
+        );
+        
+        Ok(())
+    }
+}

@@ -265,6 +265,28 @@ button.disabled {
   font-size: 0.875rem;
 }
 
+/* Notification Settings */
+.notification-settings {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fff3e0;
+  border-radius: 8px;
+  border: 1px solid #ffb74d;
+}
+
+.notification-settings .form-group {
+  margin-bottom: 0.75rem;
+}
+
+.notification-notice {
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #fff3e0;
+  border-radius: 4px;
+  color: #e65100;
+  font-size: 0.875rem;
+}
+
 button {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border-color);
