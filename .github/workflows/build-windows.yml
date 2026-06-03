@@ -25,7 +25,9 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: |
+          npm install
+          npm install @rollup/rollup-win32-x64-msvc --save-optional
 
       - name: Build frontend
         run: npm run build
