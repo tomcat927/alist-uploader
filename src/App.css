@@ -416,6 +416,30 @@ tr:last-child td {
   color: #c62828;
 }
 
+.token-info {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--bg-color);
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.token-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text-light);
+  font-weight: 500;
+}
+
+.token-info code {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: #fff;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--primary-color);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-header {

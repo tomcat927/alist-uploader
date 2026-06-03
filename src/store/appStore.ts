@@ -28,6 +28,7 @@ interface AppState {
   setIsUploading: (value: boolean) => void;
   startHealthCheck: () => void;
   stopHealthCheck: () => void;
+  login: (baseUrl: string, username: string, password: string) => Promise<void>;
 }
 
 let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
@@ -130,6 +131,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error) {
       set({ alistConnected: false, alistChecking: false });
     }
+  },
+
+  login: async (baseUrl: string, username: string, password: string) => {
+    const token = await invoke<string>('alist_login', { baseUrl, username, password });
+    const newConfig: AppConfig = {
+      ...get().config!,
+      alist: { ...get().config!.alist, base_url: baseUrl, token, username, password }
+    };
+    set({ config: newConfig, alistConnected: true });
   },
 
   startHealthCheck: () => {

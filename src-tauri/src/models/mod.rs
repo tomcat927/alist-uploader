@@ -107,6 +107,8 @@ impl UploadTask {
 pub struct AlistConfig {
     pub base_url: String,
     pub token: String,
+    pub username: String,
+    pub password: String,
 }
 
 impl Default for AlistConfig {
@@ -114,6 +116,8 @@ impl Default for AlistConfig {
         Self {
             base_url: "http://127.0.0.1:5244".to_string(),
             token: String::new(),
+            username: String::new(),
+            password: String::new(),
         }
     }
 }

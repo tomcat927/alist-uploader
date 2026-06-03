@@ -303,7 +303,7 @@ function App() {
         {activeTab === 'settings' && configForm && (
           <div className="settings-tab">
             <div className="settings-section">
-              <h3>Alist 配置</h3>
+              <h3>Alist 账号配置</h3>
               <div className="form-group">
                 <label>服务地址:</label>
                 <input
@@ -313,28 +313,71 @@ function App() {
                     ...configForm,
                     alist: { ...configForm.alist, base_url: e.target.value }
                   })}
+                  placeholder="http://127.0.0.1:5244"
                 />
               </div>
               <div className="form-group">
-                <label>Token:</label>
+                <label>用户名:</label>
                 <input
-                  type="password"
-                  value={configForm.alist.token}
+                  type="text"
+                  value={configForm.alist.username}
                   onChange={(e) => setConfigForm({
                     ...configForm,
-                    alist: { ...configForm.alist, token: e.target.value }
+                    alist: { ...configForm.alist, username: e.target.value }
                   })}
-                  placeholder="可选，如果 Alist 需要认证"
+                  placeholder="填写你的 Alist 账号"
                 />
               </div>
-              <button onClick={handleTestConnection} className="secondary">
-                测试连接
-              </button>
+              <div className="form-group">
+                <label>密码:</label>
+                <input
+                  type="password"
+                  value={configForm.alist.password}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    alist: { ...configForm.alist, password: e.target.value }
+                  })}
+                  placeholder="填写你的 Alist 密码"
+                />
+              </div>
+              <div className="toolbar-actions">
+                <button 
+                  onClick={async () => {
+                    try {
+                      useAppStore.getState().login(
+                        configForm.alist.base_url,
+                        configForm.alist.username,
+                        configForm.alist.password
+                      );
+                      setConnectionStatus('success');
+                      setTimeout(() => setConnectionStatus('idle'), 3000);
+                    } catch (error) {
+                      setConnectionStatus('error');
+                      setTimeout(() => setConnectionStatus('idle'), 3000);
+                    }
+                  }} 
+                  className="secondary"
+                  disabled={!configForm.alist.username || !configForm.alist.password}
+                >
+                  登录获取 Token
+                </button>
+                <button onClick={handleTestConnection} className="secondary">
+                  测试连接
+                </button>
+              </div>
               {connectionStatus === 'success' && (
-                <span className="test-result success">连接成功</span>
+                <span className="test-result success">
+                  {configForm.alist.token ? 'Token 已缓存' : '连接成功'}
+                </span>
               )}
               {connectionStatus === 'error' && (
-                <span className="test-result error">连接失败</span>
+                <span className="test-result error">认证失败，请检查账号密码</span>
+              )}
+              {configForm.alist.token && (
+                <div className="token-info">
+                  <span className="token-label">Token（自动缓存，无需修改）:</span>
+                  <code>{configForm.alist.token.substring(0, 20)}...</code>
+                </div>
               )}
             </div>
 

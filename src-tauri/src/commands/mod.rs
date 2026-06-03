@@ -145,3 +145,32 @@ pub async fn check_health(config: AppConfig) -> Result<bool, String> {
         .await
         .map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub async fn alist_login(
+    queue_manager: State<'_, QueueManager>,
+    base_url: String,
+    username: String,
+    password: String,
+) -> Result<String, String> {
+    let client = AlistClient::new(base_url.clone(), String::new());
+    
+    let token = client
+        .login(&username, &password)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // 获取当前配置并更新
+    let mut config = queue_manager.config.write().await;
+    config.alist.base_url = base_url;
+    config.alist.token = token.clone();
+    config.alist.username = username;
+    config.alist.password = password;
+    
+    // 保存配置
+    drop(config);
+    queue_manager.save_config(queue_manager.config.read().await.clone()).await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(token)
+}

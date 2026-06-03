@@ -24,6 +24,8 @@ export interface UploadTask {
 export interface AlistConfig {
   base_url: string;
   token: string;
+  username: string;
+  password: string;
 }
 
 export interface UploadConfig {

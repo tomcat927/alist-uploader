@@ -34,6 +34,11 @@ pub struct AlistUserResp {
     pub role: bool,
 }
 
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct LoginResp {
+    pub token: String,
+}
+
 #[derive(Debug, serde::Deserialize)]
 pub struct AlistTaskResp {
     pub id: String,
@@ -65,6 +70,31 @@ impl AlistClient {
             client,
             base_url,
             token,
+        }
+    }
+
+    pub async fn login(&self, username: &str, password: &str) -> Result<String, AlistError> {
+        let url = format!("{}/api/auth/login", self.base_url);
+        
+        let body = serde_json::json!({
+            "username": username,
+            "password": password
+        });
+
+        let response = self.client
+            .post(&url)
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp: AlistResponse<LoginResp> = response.json().await?;
+        
+        if resp.code == 200 {
+            resp.data
+                .map(|d| d.token)
+                .ok_or_else(|| AlistError::Api("登录成功但未返回 token".into()))
+        } else {
+            Err(AlistError::Api(resp.message))
         }
     }
 
