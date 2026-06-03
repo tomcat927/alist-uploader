@@ -240,4 +240,41 @@ impl AlistClient {
             .find(|t| t.id == task_id)
             .ok_or_else(|| AlistError::Api(format!("任务 {} 未找到", task_id)))
     }
+
+    pub async fn list_directory(&self, path: &str) -> Result<Vec<DirItem>, AlistError> {
+        let url = format!("{}/api/fs/list", self.base_url);
+        
+        let body = serde_json::json!({
+            "path": path
+        });
+
+        let response = self.client
+            .post(&url)
+            .headers(self.headers())
+            .json(&body)
+            .send()
+            .await?;
+
+        let resp: AlistResponse<ListResp> = response.json().await?;
+        
+        if resp.code == 200 {
+            Ok(resp.data.map(|d| d.content).unwrap_or_default())
+        } else {
+            Err(AlistError::Api(resp.message))
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, Default)]
+pub struct ListResp {
+    pub content: Vec<DirItem>,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+pub struct DirItem {
+    pub name: String,
+    pub size: i64,
+    pub is_dir: bool,
+    pub modified: Option<String>,
+    pub sign: Option<String>,
 }

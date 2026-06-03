@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
+import { FolderPicker } from './components/FolderPicker';
 import type { AppConfig } from './types';
 import './App.css';
 
@@ -178,11 +179,10 @@ function App() {
             <div className="queue-toolbar">
               <div className="upload-path-input">
                 <label>Alist 上传路径:</label>
-                <input
-                  type="text"
+                <FolderPicker
                   value={alistPath}
-                  onChange={(e) => setAlistPath(e.target.value)}
-                  placeholder="/dav/path"
+                  onChange={setAlistPath}
+                  disabled={isUploading}
                 />
               </div>
               <div className="toolbar-actions">

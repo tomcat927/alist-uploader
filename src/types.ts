@@ -28,6 +28,14 @@ export interface AlistConfig {
   password: string;
 }
 
+export interface DirItem {
+  name: string;
+  size: number;
+  is_dir: boolean;
+  modified?: string;
+  sign?: string;
+}
+
 export interface UploadConfig {
   concurrency: number;
   max_retries: number;

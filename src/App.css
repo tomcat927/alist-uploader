@@ -451,6 +451,105 @@ tr:last-child td {
   color: var(--primary-color);
 }
 
+/* Folder Picker */
+.folder-picker {
+  position: relative;
+}
+
+.folder-picker-input {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.folder-picker-input input {
+  flex: 1;
+}
+
+.folder-picker-input button {
+  white-space: nowrap;
+}
+
+.folder-picker-dialog {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 0.5rem;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  max-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.folder-picker-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.folder-picker-header .current-path {
+  flex: 1;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.875rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-picker-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.folder-item:hover {
+  background: var(--bg-color);
+}
+
+.folder-icon {
+  font-size: 1.125rem;
+}
+
+.folder-name {
+  flex: 1;
+}
+
+.loading-folders,
+.error-folders,
+.empty-folders {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-light);
+}
+
+.error-folders {
+  color: var(--danger-color);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .app-header {

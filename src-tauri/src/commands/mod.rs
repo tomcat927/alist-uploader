@@ -174,3 +174,13 @@ pub async fn alist_login(
     
     Ok(token)
 }
+
+#[tauri::command]
+pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<Vec<DirItem>, String> {
+    let client = AlistClient::new(config.alist.base_url, config.alist.token);
+    
+    client
+        .list_directory(&path)
+        .await
+        .map_err(|e| e.to_string())
+}

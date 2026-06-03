@@ -32,6 +32,7 @@ pub fn run() {
             crate::commands::get_data_path,
             crate::commands::check_health,
             crate::commands::alist_login,
+            crate::commands::alist_list_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
