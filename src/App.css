@@ -184,6 +184,17 @@ body {
 }
 
 /* Queue Tab */
+.queue-tab {
+  height: 100%;
+}
+
+.queue-tab.dragging {
+  border: 2px dashed var(--primary-color);
+  background: rgba(33, 150, 243, 0.05);
+  border-radius: 8px;
+  min-height: 400px;
+}
+
 .queue-toolbar, .history-toolbar {
   display: flex;
   justify-content: space-between;

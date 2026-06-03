@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
+import { listen } from '@tauri-apps/api/event';
 import type { AppConfig } from './types';
 import './App.css';
 
@@ -43,11 +44,25 @@ function App() {
     // 启动心跳检测
     startHealthCheck();
     
-    // 清理
+    // 监听文件拖拽事件
+    const unlisten = listen('tauri://file-drop', async (event) => {
+      const paths = event.payload as string[];
+      if (Array.isArray(paths)) {
+        for (const filePath of paths) {
+          try {
+            await addToFileQueue(filePath, alistPath);
+          } catch (error) {
+            console.error('Failed to add file:', error);
+          }
+        }
+      }
+    });
+
     return () => {
       stopHealthCheck();
+      unlisten.then((fn) => fn());
     };
-  }, []);
+  }, [alistPath]);
 
   useEffect(() => {
     if (config) {
@@ -197,7 +212,7 @@ function App() {
               {queue.length === 0 ? (
                 <div className="empty-state">
                   <p>队列为空</p>
-                  <p>请选择文件添加到上传队列</p>
+                  <p>拖拽文件到此处，或点击"选择文件"按钮添加</p>
                 </div>
               ) : (
                 <table>
