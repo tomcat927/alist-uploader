@@ -1,4 +1,5 @@
 pub use dashmap::DashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use crate::models::*;
@@ -10,6 +11,7 @@ pub struct QueueManager {
     pub config: Arc<RwLock<AppConfig>>,
     pub processing_tasks: Arc<DashMap<String, UploadTask>>,
     is_uploading: Arc<AtomicBool>,
+    stop_after_current: Arc<AtomicBool>,
 }
 
 impl QueueManager {
@@ -24,6 +26,7 @@ impl QueueManager {
             config: Arc::new(RwLock::new(config)),
             processing_tasks: Arc::new(DashMap::new()),
             is_uploading: Arc::new(AtomicBool::new(false)),
+            stop_after_current: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -128,7 +131,16 @@ impl QueueManager {
             config: Arc::clone(&self.config),
             processing_tasks: Arc::clone(&self.processing_tasks),
             is_uploading: Arc::clone(&self.is_uploading),
+            stop_after_current: Arc::clone(&self.stop_after_current),
         })
+    }
+
+    pub fn stop_after_current(&self) -> bool {
+        self.stop_after_current.load(Ordering::SeqCst)
+    }
+
+    pub fn set_stop_after_current(&self, value: bool) {
+        self.stop_after_current.store(value, Ordering::SeqCst);
     }
 }
 

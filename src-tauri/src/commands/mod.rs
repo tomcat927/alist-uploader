@@ -86,9 +86,13 @@ pub async fn start_upload(queue_manager: State<'_, QueueManager>) -> Result<(), 
 
 #[tauri::command]
 pub async fn pause_upload(queue_manager: State<'_, QueueManager>) -> Result<(), String> {
-    let scheduler =
-        crate::services::upload_scheduler::UploadScheduler::new(queue_manager.inner().clone_inner());
-    scheduler.stop_scheduler();
+    queue_manager.set_stop_after_current(true);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn stop_after_current(queue_manager: State<'_, QueueManager>) -> Result<(), String> {
+    queue_manager.set_stop_after_current(true);
     Ok(())
 }
 

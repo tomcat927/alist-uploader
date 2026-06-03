@@ -10,6 +10,7 @@ interface AppState {
   isLoading: boolean;
   alistConnected: boolean;
   alistChecking: boolean;
+  isStopping: boolean;
   
   // Actions
   loadQueue: () => Promise<void>;
@@ -26,6 +27,7 @@ interface AppState {
   testConnection: () => Promise<boolean>;
   checkHealth: () => Promise<void>;
   setIsUploading: (value: boolean) => void;
+  setIsStopping: (value: boolean) => void;
   startHealthCheck: () => void;
   stopHealthCheck: () => void;
   login: (baseUrl: string, username: string, password: string) => Promise<void>;
@@ -41,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoading: true,
   alistConnected: false,
   alistChecking: false,
+  isStopping: false,
 
   loadQueue: async () => {
     try {
@@ -96,8 +99,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   pauseUpload: async () => {
-    await invoke('pause_upload');
-    set({ isUploading: false });
+    await invoke('stop_after_current');
+    // 开始轮询检查是否已停止
+    const checkStopped = async () => {
+      const queue = await invoke<UploadTask[]>('get_queue');
+      const uploadingTasks = queue.filter(t => t.status === 'uploading');
+      if (uploadingTasks.length === 0) {
+        set({ isUploading: false, isStopping: false });
+      } else {
+        setTimeout(checkStopped, 1000);
+      }
+    };
+    checkStopped();
   },
 
   retryUpload: async (taskId) => {
@@ -119,6 +132,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setIsUploading: (value) => {
     set({ isUploading: value });
+  },
+
+  setIsStopping: (value) => {
+    set({ isStopping: value });
   },
 
   checkHealth: async () => {

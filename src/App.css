@@ -224,6 +224,23 @@ body {
 .toolbar-actions, .settings-actions {
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+}
+
+.stopping-notice {
+  margin-left: 1rem;
+  padding: 0.5rem 1rem;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-radius: 4px;
+  color: #e65100;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+button.disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 button {

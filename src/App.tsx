@@ -15,6 +15,7 @@ function App() {
     isLoading,
     alistConnected,
     alistChecking,
+    isStopping,
     loadQueue,
     addToFileQueue,
     removeFromQueue,
@@ -27,7 +28,6 @@ function App() {
     pauseUpload,
     retryUpload,
     testConnection,
-    setIsUploading,
     startHealthCheck,
     stopHealthCheck,
   } = useAppStore();
@@ -63,7 +63,7 @@ function App() {
       stopHealthCheck();
       unlisten.then((fn) => fn());
     };
-  }, [alistPath]);
+  }, [alistPath, loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
 
   useEffect(() => {
     if (config) {
@@ -94,7 +94,6 @@ function App() {
 
   const handlePauseUpload = async () => {
     await pauseUpload();
-    setIsUploading(false);
   };
 
   const handleTestConnection = async () => {
@@ -197,15 +196,24 @@ function App() {
                   >
                     开始上传
                   </button>
+                ) : isStopping ? (
+                  <button disabled className="warning disabled">
+                    停止中...
+                  </button>
                 ) : (
                   <button onClick={handlePauseUpload} className="warning">
-                    暂停
+                    停止队列
                   </button>
                 )}
-                <button onClick={clearQueue} disabled={queue.length === 0}>
+                <button onClick={clearQueue} disabled={queue.length === 0 || isUploading}>
                   清空队列
                 </button>
               </div>
+              {isStopping && (
+                <div className="stopping-notice">
+                  等待当前文件上传完成后停止...
+                </div>
+              )}
             </div>
 
             <div className="queue-list">

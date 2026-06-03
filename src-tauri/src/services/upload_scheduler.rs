@@ -58,6 +58,11 @@ impl UploadScheduler {
     }
 
     async fn can_start_new_task(&self, config: &AppConfig) -> bool {
+        // 如果已设置停止标志，不再启动新任务
+        if self.queue_manager.stop_after_current() {
+            return false;
+        }
+        
         let active_count = self.get_active_task_count().await;
         active_count < config.upload.concurrency as usize
     }
