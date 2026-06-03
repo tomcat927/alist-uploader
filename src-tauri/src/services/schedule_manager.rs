@@ -20,10 +20,12 @@ impl ScheduleManager {
 
             let config = self.queue_manager.config.read().await;
             let schedule = match &config.upload.schedule {
-                Some(s) if s.enabled => s.clone(),
-                _ => continue,
+                Some(s) if s.enabled => Some(s.clone()),
+                _ => None,
             };
             drop(config);
+            
+            let Some(schedule) = schedule else { continue };
 
             let now = Local::now();
             let current_time = format!("{:02}:{:02}", now.hour(), now.minute());
