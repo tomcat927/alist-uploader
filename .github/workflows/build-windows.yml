@@ -27,7 +27,7 @@ jobs:
       - name: Install frontend dependencies
         run: |
           npm install
-          npm install @rollup/rollup-win32-x64-msvc --save-optional
+          npm install @rollup/rollup-win32-x64-msvc @tauri-apps/cli-win32-x64-msvc --save-optional
 
       - name: Build frontend
         run: npm run build
