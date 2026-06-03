@@ -11,6 +11,8 @@ function App() {
     config,
     isUploading,
     isLoading,
+    alistConnected,
+    alistChecking,
     loadQueue,
     addToFileQueue,
     removeFromQueue,
@@ -24,6 +26,8 @@ function App() {
     retryUpload,
     testConnection,
     setIsUploading,
+    startHealthCheck,
+    stopHealthCheck,
   } = useAppStore();
 
   const [alistPath, setAlistPath] = useState('/');
@@ -35,6 +39,14 @@ function App() {
     loadQueue();
     loadHistory();
     loadConfig();
+    
+    // 启动心跳检测
+    startHealthCheck();
+    
+    // 清理
+    return () => {
+      stopHealthCheck();
+    };
   }, []);
 
   useEffect(() => {
@@ -112,6 +124,12 @@ function App() {
       <header className="app-header">
         <h1>Alist 上传管理器</h1>
         <div className="header-status">
+          <div className="alist-status">
+            <span className={`status-dot ${alistChecking ? 'checking' : alistConnected ? 'connected' : 'disconnected'}`} />
+            <span className="status-label">
+              {alistChecking ? '检测中...' : alistConnected ? 'Alist 已连接' : 'Alist 未连接'}
+            </span>
+          </div>
           <span className={`status-indicator ${isUploading ? 'active' : ''}`}>
             {isUploading ? '上传中' : '空闲'}
           </span>

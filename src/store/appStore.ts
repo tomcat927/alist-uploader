@@ -8,6 +8,8 @@ interface AppState {
   config: AppConfig | null;
   isUploading: boolean;
   isLoading: boolean;
+  alistConnected: boolean;
+  alistChecking: boolean;
   
   // Actions
   loadQueue: () => Promise<void>;
@@ -22,8 +24,13 @@ interface AppState {
   pauseUpload: () => Promise<void>;
   retryUpload: (taskId: string) => Promise<void>;
   testConnection: () => Promise<boolean>;
+  checkHealth: () => Promise<void>;
   setIsUploading: (value: boolean) => void;
+  startHealthCheck: () => void;
+  stopHealthCheck: () => void;
 }
+
+let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 
 export const useAppStore = create<AppState>((set, get) => ({
   queue: [],
@@ -31,6 +38,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   config: null,
   isUploading: false,
   isLoading: true,
+  alistConnected: false,
+  alistChecking: false,
 
   loadQueue: async () => {
     try {
@@ -109,5 +118,36 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setIsUploading: (value) => {
     set({ isUploading: value });
+  },
+
+  checkHealth: async () => {
+    const state = get();
+    if (!state.config) return;
+    
+    try {
+      const result = await invoke<boolean>('check_health', { config: state.config });
+      set({ alistConnected: result, alistChecking: false });
+    } catch (error) {
+      set({ alistConnected: false, alistChecking: false });
+    }
+  },
+
+  startHealthCheck: () => {
+    if (healthCheckInterval) return;
+    
+    // 立即检查一次
+    get().checkHealth();
+    
+    // 然后每 30 秒检查一次
+    healthCheckInterval = setInterval(() => {
+      get().checkHealth();
+    }, 30000);
+  },
+
+  stopHealthCheck: () => {
+    if (healthCheckInterval) {
+      clearInterval(healthCheckInterval);
+      healthCheckInterval = null;
+    }
   },
 }));

@@ -135,3 +135,13 @@ pub async fn get_data_path() -> Result<String, String> {
         .to_string_lossy()
         .to_string())
 }
+
+#[tauri::command]
+pub async fn check_health(config: AppConfig) -> Result<bool, String> {
+    let client = AlistClient::new(config.alist.base_url, config.alist.token);
+    
+    client
+        .test_connection()
+        .await
+        .map_err(|e| e.to_string())
+}
