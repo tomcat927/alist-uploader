@@ -48,72 +48,72 @@ jobs:
             src-tauri/target/release/bundle/nsis/*.exe
           retention-days: 30
 
-      - name: Push to releases repository
-        shell: pwsh
-        run: |
-          Write-Host "📦 Preparing to push to releases repository..."
-          
-          # Configure git
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          
-          # Remove old temp directory if exists
-          if (Test-Path "temp-release") {
-            Remove-Item -Recurse -Force temp-release
-          }
-          
-          # Try to clone, or create new repo
-          if (-not (Test-Path "temp-release")) {
-            Write-Host "Creating new releases repository..."
-            New-Item -ItemType Directory -Path "temp-release" -Force | Out-Null
-            Push-Location temp-release
-            git init -b main
-            git remote add origin https://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@github.com/tomcat927/alist-uploader-releases.git
-            Pop-Location
-          }
-          
-          Set-Location temp-release
-          
-          # Remove old files
-          Remove-Item -Recurse -Force -Path "*.*" -ErrorAction SilentlyContinue
-          Remove-Item -Force -ErrorAction SilentlyContinue
-          
-          # Copy new artifacts
-          Write-Host "📋 Copying build artifacts..."
-          Get-ChildItem "../src-tauri/target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName "." }
-          Get-ChildItem "../src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName "." }
-          
-          # Create DOWNLOADS.md
-          $lines = @(
-            "# Alist Uploader - Latest Releases",
-            "",
-            "自动构建的最新版本，每次提交自动更新。",
-            "",
-            "## 下载",
-            "",
-            "MSI 安装包: alist-uploader_*.msi",
-            "EXE 安装包: alist-uploader_*.exe",
-            "",
-            "## 版本信息",
-            "",
-            "构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')",
-            "Commit: ${env:GITHUB_SHA}",
-            "",
-            "## 使用方式",
-            "",
-            "1. 下载安装包",
-            "2. 双击运行安装",
-            "3. 配置 Alist 账号密码",
-            "4. 开始上传"
-          )
-          $downloadContent = $lines -join "`r`n"
-          
-          Set-Content -Path "DOWNLOADS.md" -Value $downloadContent -Encoding UTF8
-          
-          # Commit and push
-          git add -A
-          git commit -m "🚀 Auto-release: Build from commit ${{ github.sha }}" -m "No changes to commit"
-          git push -f --set-upstream origin main 2>&1 || git push -f origin main 2>&1 || git push -f 2>&1
-          
-          Write-Host "✅ Successfully pushed to releases repository!"
-          Write-Host "📥 Download from: https://github.com/tomcat927/alist-uploader-releases"
+      # - name: Push to releases repository
+      #   shell: pwsh
+      #   run: |
+      #     Write-Host "📦 Preparing to push to releases repository..."
+      #     
+      #     # Configure git
+      #     git config --global user.name "GitHub Actions"
+      #     git config --global user.email "actions@github.com"
+      #     
+      #     # Remove old temp directory if exists
+      #     if (Test-Path "temp-release") {
+      #       Remove-Item -Recurse -Force temp-release
+      #     }
+      #     
+      #     # Try to clone, or create new repo
+      #     if (-not (Test-Path "temp-release")) {
+      #       Write-Host "Creating new releases repository..."
+      #       New-Item -ItemType Directory -Path "temp-release" -Force | Out-Null
+      #       Push-Location temp-release
+      #       git init -b main
+      #       git remote add origin https://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@github.com/tomcat927/alist-uploader-releases.git
+      #       Pop-Location
+      #     }
+      #     
+      #     Set-Location temp-release
+      #     
+      #     # Remove old files
+      #     Remove-Item -Recurse -Force -Path "*.*" -ErrorAction SilentlyContinue
+      #     Remove-Item -Force -ErrorAction SilentlyContinue
+      #     
+      #     # Copy new artifacts
+      #     Write-Host "📋 Copying build artifacts..."
+      #     Get-ChildItem "../src-tauri/target/release/bundle/msi/*.msi" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName "." }
+      #     Get-ChildItem "../src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue | ForEach-Object { Copy-Item $_.FullName "." }
+      #     
+      #     # Create DOWNLOADS.md
+      #     $lines = @(
+      #       "# Alist Uploader - Latest Releases",
+      #       "",
+      #       "自动构建的最新版本，每次提交自动更新。",
+      #       "",
+      #       "## 下载",
+      #       "",
+      #       "MSI 安装包: alist-uploader_*.msi",
+      #       "EXE 安装包: alist-uploader_*.exe",
+      #       "",
+      #       "## 版本信息",
+      #       "",
+      #       "构建时间: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')",
+      #       "Commit: ${env:GITHUB_SHA}",
+      #       "",
+      #       "## 使用方式",
+      #       "",
+      #       "1. 下载安装包",
+      #       "2. 双击运行安装",
+      #       "3. 配置 Alist 账号密码",
+      #       "4. 开始上传"
+      #     )
+      #     $downloadContent = $lines -join "`r`n"
+      #     
+      #     Set-Content -Path "DOWNLOADS.md" -Value $downloadContent -Encoding UTF8
+      #     
+      #     # Commit and push
+      #     git add -A
+      #     git commit -m "🚀 Auto-release: Build from commit ${{ github.sha }}" -m "No changes to commit"
+      #     git push -f --set-upstream origin main 2>&1 || git push -f origin main 2>&1 || git push -f 2>&1
+      #     
+      #     Write-Host "✅ Successfully pushed to releases repository!"
+      #     Write-Host "📥 Download from: https://github.com/tomcat927/alist-uploader-releases"
