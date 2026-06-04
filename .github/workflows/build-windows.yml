@@ -57,22 +57,28 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
           
-          # Clone or create releases repository
+          # Remove old temp directory if exists
           if [ -d "temp-release" ]; then
             rm -rf temp-release
           fi
           
-          if git clone https://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@github.com/tomcat927/alist-uploader-releases.git temp-release 2>/dev/null; then
-            echo "Cloned existing repository"
-          else
+          # Try to clone, or create new repo
+          if ! git clone https://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@github.com/tomcat927/alist-uploader-releases.git temp-release 2>/dev/null; then
             echo "Creating new releases repository..."
-            mkdir -p temp-release
+            mkdir temp-release
             cd temp-release
             git init -b main
             git remote add origin https://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@github.com/tomcat927/alist-uploader-releases.git
           fi
           
+          # Navigate to temp-release directory
+          if [ ! -d "temp-release" ]; then
+            echo "ERROR: temp-release directory not found!"
+            ls -la
+            exit 1
+          fi
           cd temp-release
+          pwd
           
           # Remove old files
           rm -rf * .* 2>/dev/null || true
