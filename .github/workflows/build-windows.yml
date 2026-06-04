@@ -66,13 +66,13 @@ jobs:
           if (-not (Test-Path "temp-release")) {
             Write-Host "Creating new releases repository..."
             New-Item -ItemType Directory -Path "temp-release" -Force | Out-Null
-            Set-Location temp-release
+            Push-Location temp-release
             git init -b main
             git remote add origin https://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@github.com/tomcat927/alist-uploader-releases.git
+            Pop-Location
           }
           
           Set-Location temp-release
-          Get-Location
           
           # Remove old files
           Remove-Item -Recurse -Force -Path "*.*" -ErrorAction SilentlyContinue
