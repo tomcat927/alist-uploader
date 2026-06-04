@@ -62,19 +62,20 @@ jobs:
             rm -rf temp-release
           fi
           
-          git clone https://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@github.com/tomcat927/alist-uploader-releases.git temp-release 2>/dev/null || {
+          if git clone https://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@github.com/tomcat927/alist-uploader-releases.git temp-release 2>/dev/null; then
+            echo "Cloned existing repository"
+          else
             echo "Creating new releases repository..."
             mkdir -p temp-release
             cd temp-release
             git init -b main
             git remote add origin https://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@github.com/tomcat927/alist-uploader-releases.git
-          }
+          fi
           
           cd temp-release
           
           # Remove old files
-          rm -rf *
-          rm -rf .* 2>/dev/null || true
+          rm -rf * .* 2>/dev/null || true
           
           # Copy new artifacts
           echo "📋 Copying build artifacts..."
