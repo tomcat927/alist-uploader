@@ -49,6 +49,7 @@ jobs:
           retention-days: 30
 
       - name: Push to releases repository
+        shell: bash
         run: |
           echo "📦 Preparing to push to releases repository..."
           
@@ -89,8 +90,8 @@ jobs:
           echo "" >> DOWNLOADS.md
           echo "## 版本信息" >> DOWNLOADS.md
           echo "" >> DOWNLOADS.md
-          echo "- 构建时间：\$(date -u +\"%Y-%m-%d %H:%M:%S UTC\")" >> DOWNLOADS.md
-          echo "- Commit: \${GITHUB_SHA}" >> DOWNLOADS.md
+          echo "- 构建时间：$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> DOWNLOADS.md
+          echo "- Commit: ${GITHUB_SHA}" >> DOWNLOADS.md
           echo "" >> DOWNLOADS.md
           echo "## 使用方式" >> DOWNLOADS.md
           echo "" >> DOWNLOADS.md
