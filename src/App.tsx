@@ -3,7 +3,7 @@ import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
 import { FolderPicker } from './components/FolderPicker';
-import type { AppConfig } from './types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
 import './App.css';
 
 function App() {
@@ -34,7 +34,7 @@ function App() {
 
   const [alistPath, setAlistPath] = useState('/');
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
-  const [configForm, setConfigForm] = useState<AppConfig | null>(null);
+  const [configForm, setConfigForm] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   useEffect(() => {
@@ -66,9 +66,7 @@ function App() {
   }, [alistPath, loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
 
   useEffect(() => {
-    if (config) {
-      setConfigForm({ ...config });
-    }
+    setConfigForm(normalizeAppConfig(config));
   }, [config]);
 
   const handleSelectFiles = async () => {
@@ -97,10 +95,8 @@ function App() {
   };
 
   const handleTestConnection = async () => {
-    if (!configForm) return;
-    
     try {
-      const success = await testConnection();
+      const success = await testConnection(configForm);
       setConnectionStatus(success ? 'success' : 'error');
       setTimeout(() => setConnectionStatus('idle'), 3000);
     } catch (error) {
@@ -110,8 +106,7 @@ function App() {
   };
 
   const handleSaveConfig = async () => {
-    if (!configForm) return;
-    await saveConfig(configForm);
+    await saveConfig(normalizeAppConfig(configForm));
   };
 
   const formatFileSize = (bytes: number) => {
@@ -323,7 +318,7 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'settings' && configForm && (
+        {activeTab === 'settings' && (
           <div className="settings-tab">
             <div className="settings-section">
               <h3>Alist 账号配置</h3>
@@ -367,7 +362,7 @@ function App() {
                 <button 
                   onClick={async () => {
                     try {
-                      useAppStore.getState().login(
+                      await useAppStore.getState().login(
                         configForm.alist.base_url,
                         configForm.alist.username,
                         configForm.alist.password

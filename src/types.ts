@@ -69,3 +69,61 @@ export interface AppConfig {
   upload: UploadConfig;
   history: HistoryConfig;
 }
+
+export const DEFAULT_APP_CONFIG: AppConfig = {
+  alist: {
+    base_url: 'http://127.0.0.1:5244',
+    token: '',
+    username: '',
+    password: '',
+  },
+  upload: {
+    concurrency: 1,
+    max_retries: 5,
+    as_task: true,
+    file_exists_strategy: {
+      strategy: 'ask',
+    },
+    show_progress: false,
+    schedule: {
+      enabled: false,
+      start_time: '03:00',
+      end_time: '07:00',
+    },
+    notification: {
+      enabled: false,
+      webhook_url: '',
+      channels: ['feishu'],
+    },
+  },
+  history: {
+    max_records: 100,
+  },
+};
+
+export const normalizeAppConfig = (config?: Partial<AppConfig> | null): AppConfig => ({
+  alist: {
+    ...DEFAULT_APP_CONFIG.alist,
+    ...config?.alist,
+  },
+  upload: {
+    ...DEFAULT_APP_CONFIG.upload,
+    ...config?.upload,
+    file_exists_strategy: {
+      ...DEFAULT_APP_CONFIG.upload.file_exists_strategy,
+      ...config?.upload?.file_exists_strategy,
+    },
+    schedule: {
+      ...DEFAULT_APP_CONFIG.upload.schedule!,
+      ...config?.upload?.schedule,
+    },
+    notification: {
+      ...DEFAULT_APP_CONFIG.upload.notification!,
+      ...config?.upload?.notification,
+    },
+  },
+  history: {
+    ...DEFAULT_APP_CONFIG.history,
+    ...config?.history,
+  },
+});

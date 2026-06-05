@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import type { UploadTask, AppConfig, TaskStatus } from '../types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type UploadTask, type AppConfig, type TaskStatus } from '../types';
 
 interface AppState {
   queue: UploadTask[];
@@ -24,7 +24,7 @@ interface AppState {
   startUpload: () => Promise<void>;
   pauseUpload: () => Promise<void>;
   retryUpload: (taskId: string) => Promise<void>;
-  testConnection: () => Promise<boolean>;
+  testConnection: (config?: AppConfig) => Promise<boolean>;
   checkHealth: () => Promise<void>;
   setIsUploading: (value: boolean) => void;
   setIsStopping: (value: boolean) => void;
@@ -38,7 +38,7 @@ let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 export const useAppStore = create<AppState>((set, get) => ({
   queue: [],
   history: [],
-  config: null,
+  config: DEFAULT_APP_CONFIG,
   isUploading: false,
   isLoading: true,
   alistConnected: false,
@@ -84,13 +84,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loadConfig: async () => {
-    const config = await invoke<AppConfig>('get_config');
-    set({ config });
+    try {
+      const config = await invoke<AppConfig>('get_config');
+      set({ config: normalizeAppConfig(config) });
+    } catch (error) {
+      console.error('Failed to load config:', error);
+      set({ config: DEFAULT_APP_CONFIG });
+    }
   },
 
   saveConfig: async (config) => {
-    await invoke('save_config', { config });
-    set({ config });
+    const normalizedConfig = normalizeAppConfig(config);
+    await invoke('save_config', { config: normalizedConfig });
+    set({ config: normalizedConfig });
   },
 
   startUpload: async () => {
@@ -124,10 +130,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }));
   },
 
-  testConnection: async () => {
-    const config = get().config;
-    if (!config) return false;
-    return await invoke<boolean>('test_alist_connection', { config });
+  testConnection: async (config) => {
+    const targetConfig = normalizeAppConfig(config ?? get().config);
+    return await invoke<boolean>('test_alist_connection', { config: targetConfig });
   },
 
   setIsUploading: (value) => {
@@ -152,9 +157,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   login: async (baseUrl: string, username: string, password: string) => {
     const token = await invoke<string>('alist_login', { baseUrl, username, password });
+    const currentConfig = normalizeAppConfig(get().config);
     const newConfig: AppConfig = {
-      ...get().config!,
-      alist: { ...get().config!.alist, base_url: baseUrl, token, username, password }
+      ...currentConfig,
+      alist: { ...currentConfig.alist, base_url: baseUrl, token, username, password }
     };
     set({ config: newConfig, alistConnected: true });
   },
