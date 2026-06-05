@@ -11,13 +11,17 @@ pub fn run() {
         .expect("无法初始化队列管理器");
     let queue_manager_arc = Arc::new(queue_manager);
 
-    // 启动定时任务监控
-    let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(queue_manager_arc.clone_inner());
-    tokio::spawn(async move {
-        schedule_manager.start_schedule_monitor().await;
-    });
-
     tauri::Builder::default()
+        .setup({
+            let queue_manager = queue_manager_arc.clone_inner();
+            move |_app| {
+                let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(queue_manager);
+                tauri::async_runtime::spawn(async move {
+                    schedule_manager.start_schedule_monitor().await;
+                });
+                Ok(())
+            }
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
