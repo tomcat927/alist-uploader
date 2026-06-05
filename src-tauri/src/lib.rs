@@ -3,22 +3,65 @@ pub mod services;
 pub mod commands;
 pub mod utils;
 
+fn append_log(file_name: &str, message: &str) {
+    use std::fs::{self, OpenOptions};
+    use std::io::Write;
+
+    let Some(mut log_dir) = dirs::data_local_dir() else {
+        return;
+    };
+
+    log_dir.push("alist-uploader");
+
+    if fs::create_dir_all(&log_dir).is_err() {
+        return;
+    }
+
+    let log_path = log_dir.join(file_name);
+    let timestamp = chrono::Local::now().to_rfc3339();
+
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_path) {
+        let _ = writeln!(file, "[{timestamp}] {message}");
+    }
+}
+
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        append_log("panic.log", &format!("{panic_info}"));
+        append_log("startup.log", &format!("panic: {panic_info}"));
+    }));
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use std::sync::Arc;
 
-    let queue_manager = crate::services::queue_manager::QueueManager::new()
-        .expect("无法初始化队列管理器");
+    install_panic_hook();
+    append_log("startup.log", "application startup begin");
+
+    let queue_manager = match crate::services::queue_manager::QueueManager::new() {
+        Ok(manager) => manager,
+        Err(error) => {
+            append_log("startup.log", &format!("failed to initialize queue manager: {error:?}"));
+            panic!("无法初始化队列管理器: {error:?}");
+        }
+    };
     let queue_manager_arc = Arc::new(queue_manager);
 
-    tauri::Builder::default()
+    append_log("startup.log", "queue manager initialized");
+
+    let result = tauri::Builder::default()
         .setup({
             let queue_manager = queue_manager_arc.clone_inner();
             move |_app| {
+                append_log("startup.log", "tauri setup begin");
                 let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(queue_manager);
                 tauri::async_runtime::spawn(async move {
+                    append_log("startup.log", "schedule monitor started");
                     schedule_manager.start_schedule_monitor().await;
+                    append_log("startup.log", "schedule monitor stopped");
                 });
+                append_log("startup.log", "tauri setup complete");
                 Ok(())
             }
         })
@@ -46,6 +89,10 @@ pub fn run() {
             crate::commands::alist_login,
             crate::commands::alist_list_dir,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(error) = result {
+        append_log("startup.log", &format!("tauri runtime error: {error:?}"));
+        panic!("error while running tauri application: {error:?}");
+    }
 }
