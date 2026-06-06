@@ -35,6 +35,7 @@ fn install_panic_hook() {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use std::sync::Arc;
+    use tauri::Manager;
 
     install_panic_hook();
     append_log("startup.log", "application startup begin");
@@ -51,25 +52,24 @@ pub fn run() {
 
     append_log("startup.log", "queue manager initialized");
 
+    let qm_for_setup = queue_manager_arc.clone_inner();
+
     let result = tauri::Builder::default()
-        .setup({
-            let queue_manager = queue_manager_arc.clone_inner();
-            move |_app| {
-                append_log("startup.log", "tauri setup begin");
-                let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(queue_manager);
-                tauri::async_runtime::spawn(async move {
-                    append_log("startup.log", "schedule monitor started");
-                    schedule_manager.start_schedule_monitor().await;
-                    append_log("startup.log", "schedule monitor stopped");
-                });
-                append_log("startup.log", "tauri setup complete");
-                Ok(())
-            }
+        .setup(move |app| {
+            app.manage(queue_manager_arc);
+            append_log("startup.log", "tauri setup begin");
+            let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(qm_for_setup.clone_inner());
+            tauri::async_runtime::spawn(async move {
+                append_log("startup.log", "schedule monitor started");
+                schedule_manager.start_schedule_monitor().await;
+                append_log("startup.log", "schedule monitor stopped");
+            });
+            append_log("startup.log", "tauri setup complete");
+            Ok(())
         })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .manage(queue_manager_arc)
         .invoke_handler(tauri::generate_handler![
             crate::commands::get_queue,
             crate::commands::add_to_queue,

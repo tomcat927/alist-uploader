@@ -165,13 +165,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   login: async (baseUrl: string, username: string, password: string) => {
-    const token = await invoke<string>('alist_login', { baseUrl, username, password });
-    const currentConfig = normalizeAppConfig(get().config);
-    const newConfig: AppConfig = {
-      ...currentConfig,
-      alist: { ...currentConfig.alist, base_url: baseUrl, token, username, password }
-    };
-    set({ config: newConfig, alistConnected: true });
+    console.log('[login] 开始登录流程:', { baseUrl, username });
+    await invoke<string>('alist_login', { baseUrl, username, password });
+    console.log('[login] 登录成功');
+    await get().loadConfig();
+    set({ alistConnected: true });
   },
 
   startHealthCheck: () => {

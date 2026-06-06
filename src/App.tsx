@@ -100,9 +100,10 @@ function App() {
 
   const writeClientLog = async (message: string) => {
     try {
+      console.log('[client_log]', message);
       await invoke('write_client_log', { message });
     } catch (error) {
-      console.error('Failed to write client log:', error);
+      console.error('[client_log_failed]', error);
     }
   };
 
