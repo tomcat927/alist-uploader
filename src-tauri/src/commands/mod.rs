@@ -117,12 +117,20 @@ pub async fn retry_upload(
 
 #[tauri::command]
 pub async fn test_alist_connection(config: AppConfig) -> Result<bool, String> {
+    log(&format!("收到测试连接请求: base_url={}, username={}, has_token={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty()));
+
     let client = AlistClient::new(config.alist.base_url, config.alist.token);
-    
-    client
+
+    let result = client
         .test_connection()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            log(&format!("测试连接异常: {}", e));
+            e.to_string()
+        })?;
+
+    log(&format!("测试连接结果: {}", result));
+    Ok(result)
 }
 
 #[tauri::command]
@@ -143,12 +151,20 @@ pub async fn get_data_path() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn check_health(config: AppConfig) -> Result<bool, String> {
+    log(&format!("收到服务健康检查请求: base_url={}", config.alist.base_url));
+
     let client = AlistClient::new(config.alist.base_url, config.alist.token);
 
-    client
+    let result = client
         .check_service_available()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| {
+            log(&format!("服务健康检查异常: {}", e));
+            e.to_string()
+        })?;
+
+    log(&format!("服务健康检查结果: {}", result));
+    Ok(result)
 }
 
 #[tauri::command]
@@ -158,9 +174,10 @@ pub async fn alist_login(
     username: String,
     password: String,
 ) -> Result<String, String> {
-    log(&format!("开始 Alist 登录流程: base_url={}, username={}", base_url, username));
+    let normalized_base_url = base_url.trim_end_matches('/').to_string();
+    log(&format!("开始 Alist 登录流程: base_url={}, username={}, password_length={}", normalized_base_url, username, password.len()));
 
-    let client = AlistClient::new(base_url.clone(), String::new());
+    let client = AlistClient::new(normalized_base_url.clone(), String::new());
 
     let token = client
         .login(&username, &password)
@@ -174,7 +191,7 @@ pub async fn alist_login(
 
     // 获取当前配置并更新
     let mut config = queue_manager.config.write().await;
-    config.alist.base_url = base_url;
+    config.alist.base_url = normalized_base_url;
     config.alist.token = token.clone();
     config.alist.username = username.clone();
     config.alist.password = password;
@@ -191,6 +208,12 @@ pub async fn alist_login(
 
     log(&format!("用户 {} 登录成功", username));
     Ok(token)
+}
+
+#[tauri::command]
+pub async fn write_client_log(message: String) -> Result<(), String> {
+    log(&format!("前端事件: {}", message));
+    Ok(())
 }
 
 #[tauri::command]

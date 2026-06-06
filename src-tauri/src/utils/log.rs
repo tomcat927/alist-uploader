@@ -1,47 +1,55 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use chrono::Local;
 
 static LOG_MUTEX: Mutex<()> = Mutex::new(());
 
-fn get_log_dir() -> Option<std::path::PathBuf> {
-    let Some(mut log_dir) = dirs::data_local_dir() else {
+fn get_app_dir() -> Option<PathBuf> {
+    let Some(mut app_dir) = dirs::data_local_dir() else {
         return None;
     };
 
-    log_dir.push("alist-uploader");
-    log_dir.push("logs");
+    app_dir.push("alist-uploader");
 
-    if fs::create_dir_all(&log_dir).is_err() {
+    if fs::create_dir_all(&app_dir).is_err() {
         return None;
     }
 
-    Some(log_dir)
+    Some(app_dir)
 }
 
-fn get_log_file() -> Option<std::path::PathBuf> {
-    let mut log_dir = get_log_dir()?;
-    let now = Local::now();
-    log_dir.push(format!("alist-{}.log", now.format("%Y-%m-%d")));
-    Some(log_dir)
+fn get_logs_dir() -> Option<PathBuf> {
+    let mut logs_dir = get_app_dir()?;
+    logs_dir.push("logs");
+
+    if fs::create_dir_all(&logs_dir).is_err() {
+        return None;
+    }
+
+    Some(logs_dir)
+}
+
+fn append_to_file(path: PathBuf, line: &str) {
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{}", line);
+    }
 }
 
 pub fn log(message: &str) {
     let _guard = LOG_MUTEX.lock().ok();
-
-    let Some(log_path) = get_log_file() else {
-        return;
-    };
-
     let timestamp = Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
+    let line = format!("[{}] {}", timestamp, message);
 
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_path)
-    {
-        let _ = writeln!(file, "[{}] {}", timestamp, message);
+    if let Some(mut app_log_path) = get_app_dir() {
+        app_log_path.push("debug.log");
+        append_to_file(app_log_path, &line);
+    }
+
+    if let Some(mut daily_log_path) = get_logs_dir() {
+        daily_log_path.push(format!("alist-{}.log", Local::now().format("%Y-%m-%d")));
+        append_to_file(daily_log_path, &line);
     }
 }
 

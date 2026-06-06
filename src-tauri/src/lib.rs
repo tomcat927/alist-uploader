@@ -38,6 +38,7 @@ pub fn run() {
 
     install_panic_hook();
     append_log("startup.log", "application startup begin");
+    crate::utils::log::log("application startup begin");
 
     let queue_manager = match crate::services::queue_manager::QueueManager::new() {
         Ok(manager) => manager,
@@ -87,6 +88,7 @@ pub fn run() {
             crate::commands::get_data_path,
             crate::commands::check_health,
             crate::commands::alist_login,
+            crate::commands::write_client_log,
             crate::commands::alist_list_dir,
         ])
         .run(tauri::generate_context!());

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
+import { invoke } from '@tauri-apps/api/core';
 import { FolderPicker } from './components/FolderPicker';
 import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
 import './App.css';
@@ -37,6 +38,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
   const [configForm, setConfigForm] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [connectionMessage, setConnectionMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -96,14 +98,29 @@ function App() {
     await pauseUpload();
   };
 
+  const writeClientLog = async (message: string) => {
+    try {
+      await invoke('write_client_log', { message });
+    } catch (error) {
+      console.error('Failed to write client log:', error);
+    }
+  };
+
   const handleTestConnection = async () => {
+    await writeClientLog(`点击测试连接: base_url=${configForm.alist.base_url}, username=${configForm.alist.username}, has_token=${Boolean(configForm.alist.token)}`);
+
     try {
       const success = await testConnection(configForm);
       setConnectionStatus(success ? 'success' : 'error');
-      setTimeout(() => setConnectionStatus('idle'), 3000);
+      setConnectionMessage(success ? 'Token 有效，连接成功' : 'Token 无效或未登录，请先点击登录获取 Token');
+      await writeClientLog(`测试连接完成: success=${success}`);
+      setTimeout(() => setConnectionStatus('idle'), 5000);
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       setConnectionStatus('error');
-      setTimeout(() => setConnectionStatus('idle'), 3000);
+      setConnectionMessage(message);
+      await writeClientLog(`测试连接异常: ${message}`);
+      setTimeout(() => setConnectionStatus('idle'), 5000);
     }
   };
 
@@ -364,14 +381,17 @@ function App() {
                     type="button"
                     className="password-toggle"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? '隐藏密码' : '显示密码'}
                   >
-                    {showPassword ? '👁️' : '👁️‍🗨️'}
+                    <span className={`eye-icon ${showPassword ? 'visible' : ''}`} />
                   </button>
                 </div>
               </div>
               <div className="toolbar-actions">
                 <button 
                   onClick={async () => {
+                    await writeClientLog(`点击登录获取 Token: base_url=${configForm.alist.base_url}, username=${configForm.alist.username}, password_length=${configForm.alist.password.length}`);
+
                     try {
                       await useAppStore.getState().login(
                         configForm.alist.base_url,
@@ -379,10 +399,15 @@ function App() {
                         configForm.alist.password
                       );
                       setConnectionStatus('success');
-                      setTimeout(() => setConnectionStatus('idle'), 3000);
+                      setConnectionMessage('登录成功，Token 已保存');
+                      await writeClientLog('登录获取 Token 成功');
+                      setTimeout(() => setConnectionStatus('idle'), 5000);
                     } catch (error) {
+                      const message = error instanceof Error ? error.message : String(error);
                       setConnectionStatus('error');
-                      setTimeout(() => setConnectionStatus('idle'), 3000);
+                      setConnectionMessage(message);
+                      await writeClientLog(`登录获取 Token 失败: ${message}`);
+                      setTimeout(() => setConnectionStatus('idle'), 5000);
                     }
                   }} 
                   className="secondary"
@@ -396,11 +421,11 @@ function App() {
               </div>
               {connectionStatus === 'success' && (
                 <span className="test-result success">
-                  {configForm.alist.token ? 'Token 已缓存' : '连接成功'}
+                  {connectionMessage || (configForm.alist.token ? 'Token 已缓存' : '连接成功')}
                 </span>
               )}
               {connectionStatus === 'error' && (
-                <span className="test-result error">认证失败，请检查账号密码</span>
+                <span className="test-result error">{connectionMessage || '认证失败，请检查账号密码'}</span>
               )}
               {configForm.alist.token && (
                 <div className="token-info">

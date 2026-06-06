@@ -75,9 +75,10 @@ impl AlistClient {
     }
 
     pub async fn login(&self, username: &str, password: &str) -> Result<String, AlistError> {
-        log(&format!("尝试登录 Alist: base_url={}, username={}", self.base_url, username));
+        let base_url = self.base_url.trim_end_matches('/');
+        log(&format!("尝试登录 Alist: base_url={}, username={}, password_length={}", base_url, username, password.len()));
 
-        let url = format!("{}/api/auth/login", self.base_url);
+        let url = format!("{}/api/auth/login", base_url);
 
         let body = serde_json::json!({
             "username": username,
@@ -116,7 +117,7 @@ impl AlistClient {
         if resp.code == 200 {
             match resp.data {
                 Some(d) => {
-                    log(&format!("登录成功，获取到 token: {}...", &d.token[..d.token.len().min(20)]));
+                    log(&format!("登录成功，已获取 token，token_length={}", d.token.len()));
                     Ok(d.token)
                 },
                 None => {
@@ -145,7 +146,7 @@ impl AlistClient {
     }
 
     pub async fn check_service_available(&self) -> Result<bool, AlistError> {
-        let url = format!("{}/ping", self.base_url);
+        let url = format!("{}/ping", self.base_url.trim_end_matches('/'));
 
         let response = self.client
             .get(&url)
@@ -160,7 +161,8 @@ impl AlistClient {
     }
 
     pub async fn test_connection(&self) -> Result<bool, AlistError> {
-        let url = format!("{}/api/me", self.base_url);
+        let url = format!("{}/api/me", self.base_url.trim_end_matches('/'));
+        log(&format!("测试 Token 连接: url={}, has_token={}", url, !self.token.is_empty()));
 
         let response = self.client
             .get(&url)
