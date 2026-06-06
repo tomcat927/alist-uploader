@@ -34,12 +34,9 @@ fn install_panic_hook() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    use std::sync::Arc;
-    use tauri::Manager;
-
     install_panic_hook();
     append_log("startup.log", "application startup begin");
-    crate::utils::log::log("application startup begin");
+    crate::utils::log::log("application startup begin; build_marker=state-free-login-config-v2");
 
     let queue_manager = match crate::services::queue_manager::QueueManager::new() {
         Ok(manager) => manager,
@@ -48,16 +45,16 @@ pub fn run() {
             panic!("无法初始化队列管理器: {error:?}");
         }
     };
-    let queue_manager_arc = Arc::new(queue_manager);
+    let qm_for_setup = queue_manager.clone_inner();
 
     append_log("startup.log", "queue manager initialized");
-
-    let qm_for_setup = queue_manager_arc.clone_inner();
+    crate::utils::log::log("queue manager initialized; managed_type=QueueManager");
 
     let result = tauri::Builder::default()
-        .setup(move |app| {
-            app.manage(queue_manager_arc);
+        .manage(queue_manager)
+        .setup(move |_app| {
             append_log("startup.log", "tauri setup begin");
+            crate::utils::log::log("tauri setup begin; schedule manager starting");
             let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(qm_for_setup.clone_inner());
             tauri::async_runtime::spawn(async move {
                 append_log("startup.log", "schedule monitor started");
@@ -65,6 +62,7 @@ pub fn run() {
                 append_log("startup.log", "schedule monitor stopped");
             });
             append_log("startup.log", "tauri setup complete");
+            crate::utils::log::log("tauri setup complete; QueueManager should be managed");
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())

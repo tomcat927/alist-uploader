@@ -1,7 +1,6 @@
 use reqwest::{Client, multipart, header::{HeaderMap, HeaderValue, AUTHORIZATION}};
 use std::time::Duration;
 use thiserror::Error;
-use crate::models::*;
 use crate::utils::log::log;
 
 #[derive(Error, Debug)]
@@ -102,17 +101,26 @@ impl AlistClient {
         };
 
         let status = response.status();
-        log(&format!("收到响应状态码: {}", status));
+        log(&format!("收到登录响应状态码: {}", status));
 
-        let resp: AlistResponse<LoginResp> = match response.json().await {
+        let response_text = match response.text().await {
+            Ok(text) => text,
+            Err(err) => {
+                log(&format!("读取登录响应正文失败: {}", err));
+                return Err(AlistError::Api(format!("读取响应失败: {}", err)));
+            }
+        };
+        log(&format!("登录响应正文已读取: status={}, body_length={}", status, response_text.len()));
+
+        let resp: AlistResponse<LoginResp> = match serde_json::from_str(&response_text) {
             Ok(r) => r,
             Err(err) => {
-                log(&format!("解析响应失败: {}", err));
-                return Err(AlistError::Api(format!("解析响应失败: {}", err)));
+                log(&format!("解析登录响应失败: status={}, error={}, body={}", status, err, response_text));
+                return Err(AlistError::Api(format!("解析响应失败: {}; 原始响应: {}", err, response_text)));
             }
         };
 
-        log(&format!("收到响应: code={}, message={}", resp.code, resp.message));
+        log(&format!("收到登录响应: http_status={}, code={}, message={}", status, resp.code, resp.message));
 
         if resp.code == 200 {
             match resp.data {

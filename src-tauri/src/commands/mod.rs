@@ -4,7 +4,6 @@ use crate::services::queue_manager::QueueManager;
 use crate::services::alist_client::AlistClient;
 use crate::utils::storage::Storage;
 use crate::utils::log::log;
-use tokio::sync::RwLock;
 
 #[tauri::command]
 pub async fn get_queue(queue_manager: State<'_, QueueManager>) -> Result<Vec<UploadTask>, String> {
@@ -57,20 +56,24 @@ pub async fn clear_history(queue_manager: State<'_, QueueManager>) -> Result<(),
 }
 
 #[tauri::command]
-pub async fn get_config(queue_manager: State<'_, QueueManager>) -> Result<AppConfig, String> {
-    let config = queue_manager.config.read().await;
-    Ok(config.clone())
+pub async fn get_config() -> Result<AppConfig, String> {
+    let config = Storage::load_config().map_err(|e| {
+        log(&format!("读取磁盘配置失败: {}", e));
+        e.to_string()
+    })?;
+    log(&format!("读取磁盘配置: base_url={}, username={}, has_token={}, password_length={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len()));
+    Ok(config)
 }
 
 #[tauri::command]
-pub async fn save_config(
-    queue_manager: State<'_, QueueManager>,
-    config: AppConfig,
-) -> Result<(), String> {
-    queue_manager
-        .save_config(config)
-        .await
-        .map_err(|e| e.to_string())
+pub async fn save_config(config: AppConfig) -> Result<(), String> {
+    log(&format!("收到保存配置请求: base_url={}, username={}, has_token={}, password_length={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len()));
+    Storage::save_config(&config).map_err(|e| {
+        log(&format!("保存配置失败: {}", e));
+        e.to_string()
+    })?;
+    log("配置保存成功");
+    Ok(())
 }
 
 #[tauri::command]
@@ -169,7 +172,6 @@ pub async fn check_health(config: AppConfig) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn alist_login(
-    queue_manager: State<'_, QueueManager>,
     base_url: String,
     username: String,
     password: String,
@@ -177,36 +179,47 @@ pub async fn alist_login(
     let normalized_base_url = base_url.trim_end_matches('/').to_string();
     log(&format!("开始 Alist 登录流程: base_url={}, username={}, password_length={}", normalized_base_url, username, password.len()));
 
+    if normalized_base_url.is_empty() {
+        log("Alist 登录失败: 服务地址为空");
+        return Err("服务地址不能为空".to_string());
+    }
+    if username.trim().is_empty() {
+        log("Alist 登录失败: 用户名为空");
+        return Err("用户名不能为空".to_string());
+    }
+    if password.is_empty() {
+        log("Alist 登录失败: 密码为空");
+        return Err("密码不能为空".to_string());
+    }
+
     let client = AlistClient::new(normalized_base_url.clone(), String::new());
 
     let token = client
         .login(&username, &password)
         .await
         .map_err(|e| {
-            log(&format!("Alist 登录失败: {}", e));
+            log(&format!("Alist 登录请求失败: base_url={}, username={}, error={}", normalized_base_url, username, e));
             e.to_string()
         })?;
 
-    log("Alist 登录成功，开始更新配置");
+    log(&format!("Alist 登录成功: username={}, token_length={}", username, token.len()));
 
-    // 获取当前配置并更新
-    let mut config = queue_manager.config.write().await;
-    config.alist.base_url = normalized_base_url;
+    let mut config = Storage::load_config().map_err(|e| {
+        log(&format!("读取配置失败，无法保存登录信息: {}", e));
+        e.to_string()
+    })?;
+
+    config.alist.base_url = normalized_base_url.clone();
     config.alist.token = token.clone();
     config.alist.username = username.clone();
     config.alist.password = password;
 
-    log("配置更新完成，开始保存");
+    Storage::save_config(&config).map_err(|e| {
+        log(&format!("保存登录配置失败: base_url={}, username={}, has_token={}, error={}", normalized_base_url, username, !token.is_empty(), e));
+        e.to_string()
+    })?;
 
-    // 保存配置
-    drop(config);
-    queue_manager.save_config(queue_manager.config.read().await.clone()).await
-        .map_err(|e| {
-            log(&format!("保存配置失败: {}", e));
-            e.to_string()
-        })?;
-
-    log(&format!("用户 {} 登录成功", username));
+    log(&format!("登录配置已持久化: base_url={}, username={}, has_token={}, password_length={}", normalized_base_url, username, !token.is_empty(), config.alist.password.len()));
     Ok(token)
 }
 
