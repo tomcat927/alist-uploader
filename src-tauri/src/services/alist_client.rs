@@ -111,16 +111,37 @@ impl AlistClient {
         headers
     }
 
+    pub async fn check_service_available(&self) -> Result<bool, AlistError> {
+        let url = format!("{}/ping", self.base_url);
+
+        let response = self.client
+            .get(&url)
+            .timeout(Duration::from_secs(5))
+            .send()
+            .await;
+
+        match response {
+            Ok(resp) => Ok(resp.status().is_success()),
+            Err(_) => Ok(false),
+        }
+    }
+
     pub async fn test_connection(&self) -> Result<bool, AlistError> {
         let url = format!("{}/api/me", self.base_url);
-        
+
         let response = self.client
             .get(&url)
             .headers(self.headers())
+            .timeout(Duration::from_secs(10))
             .send()
             .await?;
 
-        Ok(response.status().is_success())
+        if response.status().is_success() {
+            let resp: AlistResponse<AlistUserResp> = response.json().await?;
+            Ok(resp.code == 200)
+        } else {
+            Ok(false)
+        }
     }
 
     pub async fn get_current_user(&self) -> Result<AlistUserResp, AlistError> {
