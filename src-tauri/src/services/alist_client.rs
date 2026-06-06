@@ -29,9 +29,10 @@ pub struct AlistResponse<T> {
 
 #[derive(Debug, serde::Deserialize, Default)]
 pub struct AlistUserResp {
+    #[serde(default)]
     pub id: i64,
+    #[serde(default)]
     pub username: String,
-    pub role: bool,
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
@@ -172,6 +173,11 @@ impl AlistClient {
         let url = format!("{}/api/me", self.base_url.trim_end_matches('/'));
         log(&format!("测试 Token 连接: url={}, has_token={}", url, !self.token.is_empty()));
 
+        if self.token.is_empty() {
+            log("测试 Token 连接失败: token 为空");
+            return Ok(false);
+        }
+
         let response = self.client
             .get(&url)
             .headers(self.headers())
@@ -179,12 +185,26 @@ impl AlistClient {
             .send()
             .await?;
 
-        if response.status().is_success() {
-            let resp: AlistResponse<AlistUserResp> = response.json().await?;
-            Ok(resp.code == 200)
-        } else {
-            Ok(false)
+        let status = response.status();
+        let response_text = response.text().await.map_err(|e| {
+            log(&format!("读取 /api/me 响应失败: status={}, error={}", status, e));
+            AlistError::Api(format!("读取响应失败: {}", e))
+        })?;
+
+        log(&format!("/api/me 响应: status={}, body_length={}", status, response_text.len()));
+
+        if !status.is_success() {
+            log(&format!("/api/me HTTP 状态失败: status={}, body={}", status, response_text));
+            return Ok(false);
         }
+
+        let resp: AlistResponse<serde_json::Value> = serde_json::from_str(&response_text).map_err(|e| {
+            log(&format!("解析 /api/me 响应失败: status={}, error={}, body={}", status, e, response_text));
+            AlistError::Api(format!("解析 /api/me 响应失败: {}; 原始响应: {}", e, response_text))
+        })?;
+
+        log(&format!("/api/me 解析结果: code={}, message={}, has_data={}", resp.code, resp.message, resp.data.is_some()));
+        Ok(resp.code == 200)
     }
 
     pub async fn get_current_user(&self) -> Result<AlistUserResp, AlistError> {
