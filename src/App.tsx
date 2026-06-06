@@ -14,6 +14,7 @@ function App() {
     isUploading,
     isLoading,
     alistConnected,
+    alistServiceAvailable,
     alistChecking,
     isStopping,
     loadQueue,
@@ -36,6 +37,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
   const [configForm, setConfigForm] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     loadQueue();
@@ -135,9 +137,9 @@ function App() {
         <h1>Alist 上传管理器</h1>
         <div className="header-status">
           <div className="alist-status">
-            <span className={`status-dot ${alistChecking ? 'checking' : alistConnected ? 'connected' : 'disconnected'}`} />
+            <span className={`status-dot ${alistChecking ? 'checking' : alistServiceAvailable && alistConnected ? 'connected' : alistServiceAvailable ? 'warning' : 'disconnected'}`} />
             <span className="status-label">
-              {alistChecking ? '检测中...' : alistConnected ? 'Alist 已连接' : 'Alist 未连接'}
+              {alistChecking ? '检测中...' : alistServiceAvailable && alistConnected ? 'Alist 已连接' : alistServiceAvailable ? 'Alist 已启动，未登录' : 'Alist 服务不可用'}
             </span>
           </div>
           <span className={`status-indicator ${isUploading ? 'active' : ''}`}>
@@ -348,15 +350,24 @@ function App() {
               </div>
               <div className="form-group">
                 <label>密码:</label>
-                <input
-                  type="password"
-                  value={configForm.alist.password}
-                  onChange={(e) => setConfigForm({
-                    ...configForm,
-                    alist: { ...configForm.alist, password: e.target.value }
-                  })}
-                  placeholder="填写你的 Alist 密码"
-                />
+                <div className="password-input-wrapper">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={configForm.alist.password}
+                    onChange={(e) => setConfigForm({
+                      ...configForm,
+                      alist: { ...configForm.alist, password: e.target.value }
+                    })}
+                    placeholder="填写你的 Alist 密码"
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? '👁️' : '👁️‍🗨️'}
+                  </button>
+                </div>
               </div>
               <div className="toolbar-actions">
                 <button 

@@ -5,13 +5,14 @@ import { DEFAULT_APP_CONFIG, normalizeAppConfig, type UploadTask, type AppConfig
 interface AppState {
   queue: UploadTask[];
   history: UploadTask[];
-  config: AppConfig | null;
+  config: AppConfig;
   isUploading: boolean;
   isLoading: boolean;
   alistConnected: boolean;
+  alistServiceAvailable: boolean;
   alistChecking: boolean;
   isStopping: boolean;
-  
+
   // Actions
   loadQueue: () => Promise<void>;
   addToFileQueue: (filePath: string, alistPath: string) => Promise<UploadTask>;
@@ -42,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isUploading: false,
   isLoading: true,
   alistConnected: false,
+  alistServiceAvailable: false,
   alistChecking: false,
   isStopping: false,
 
@@ -146,12 +148,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   checkHealth: async () => {
     const state = get();
     if (!state.config) return;
-    
+
     try {
-      const result = await invoke<boolean>('check_health', { config: state.config });
-      set({ alistConnected: result, alistChecking: false });
+      const serviceAvailable = await invoke<boolean>('check_health', { config: state.config });
+
+      if (serviceAvailable) {
+        const loggedIn = await invoke<boolean>('test_alist_connection', { config: state.config });
+        set({ alistServiceAvailable: true, alistConnected: loggedIn, alistChecking: false });
+      } else {
+        set({ alistServiceAvailable: false, alistConnected: false, alistChecking: false });
+      }
     } catch (error) {
-      set({ alistConnected: false, alistChecking: false });
+      console.error('Health check failed:', error);
+      set({ alistServiceAvailable: false, alistConnected: false, alistChecking: false });
     }
   },
 

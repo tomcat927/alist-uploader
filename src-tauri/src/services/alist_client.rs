@@ -2,6 +2,7 @@ use reqwest::{Client, multipart, header::{HeaderMap, HeaderValue, AUTHORIZATION}
 use std::time::Duration;
 use thiserror::Error;
 use crate::models::*;
+use crate::utils::log::log;
 
 #[derive(Error, Debug)]
 pub enum AlistError {
@@ -74,26 +75,58 @@ impl AlistClient {
     }
 
     pub async fn login(&self, username: &str, password: &str) -> Result<String, AlistError> {
+        log(&format!("尝试登录 Alist: base_url={}, username={}", self.base_url, username));
+
         let url = format!("{}/api/auth/login", self.base_url);
-        
+
         let body = serde_json::json!({
             "username": username,
             "password": password
         });
 
-        let response = self.client
+        log(&format!("发送登录请求到: {}", url));
+
+        let response = match self.client
             .post(&url)
             .json(&body)
+            .timeout(Duration::from_secs(10))
             .send()
-            .await?;
+            .await
+        {
+            Ok(resp) => resp,
+            Err(err) => {
+                log(&format!("登录请求失败: {}", err));
+                return Err(AlistError::Request(err));
+            }
+        };
 
-        let resp: AlistResponse<LoginResp> = response.json().await?;
-        
+        let status = response.status();
+        log(&format!("收到响应状态码: {}", status));
+
+        let resp: AlistResponse<LoginResp> = match response.json().await {
+            Ok(r) => r,
+            Err(err) => {
+                log(&format!("解析响应失败: {}", err));
+                return Err(AlistError::Api(format!("解析响应失败: {}", err)));
+            }
+        };
+
+        log(&format!("收到响应: code={}, message={}", resp.code, resp.message));
+
         if resp.code == 200 {
-            resp.data
-                .map(|d| d.token)
-                .ok_or_else(|| AlistError::Api("登录成功但未返回 token".into()))
+            match resp.data {
+                Some(d) => {
+                    log(&format!("登录成功，获取到 token: {}...", &d.token[..d.token.len().min(20)]));
+                    Ok(d.token)
+                },
+                None => {
+                    log("登录成功但响应中未返回 token");
+                    Err(AlistError::Api("登录成功但未返回 token".into()))
+                }
+            }
         } else {
+            let msg = format!("登录失败: code={}, message={}", resp.code, resp.message);
+            log(&msg);
             Err(AlistError::Api(resp.message))
         }
     }

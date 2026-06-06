@@ -3,6 +3,7 @@ use crate::models::*;
 use crate::services::queue_manager::QueueManager;
 use crate::services::alist_client::AlistClient;
 use crate::utils::storage::Storage;
+use crate::utils::log::log;
 use tokio::sync::RwLock;
 
 #[tauri::command]
@@ -157,25 +158,38 @@ pub async fn alist_login(
     username: String,
     password: String,
 ) -> Result<String, String> {
+    log(&format!("开始 Alist 登录流程: base_url={}, username={}", base_url, username));
+
     let client = AlistClient::new(base_url.clone(), String::new());
-    
+
     let token = client
         .login(&username, &password)
         .await
-        .map_err(|e| e.to_string())?;
-    
+        .map_err(|e| {
+            log(&format!("Alist 登录失败: {}", e));
+            e.to_string()
+        })?;
+
+    log("Alist 登录成功，开始更新配置");
+
     // 获取当前配置并更新
     let mut config = queue_manager.config.write().await;
     config.alist.base_url = base_url;
     config.alist.token = token.clone();
-    config.alist.username = username;
+    config.alist.username = username.clone();
     config.alist.password = password;
-    
+
+    log("配置更新完成，开始保存");
+
     // 保存配置
     drop(config);
     queue_manager.save_config(queue_manager.config.read().await.clone()).await
-        .map_err(|e| e.to_string())?;
-    
+        .map_err(|e| {
+            log(&format!("保存配置失败: {}", e));
+            e.to_string()
+        })?;
+
+    log(&format!("用户 {} 登录成功", username));
     Ok(token)
 }
 
