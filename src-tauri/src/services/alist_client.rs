@@ -326,7 +326,8 @@ impl AlistClient {
     }
 
     pub async fn list_directory(&self, path: &str) -> Result<Vec<DirItem>, AlistError> {
-        let url = format!("{}/api/fs/list", self.base_url);
+        let url = format!("{}/api/fs/list", self.base_url.trim_end_matches('/'));
+        log(&format!("请求 Alist 目录列表: url={}, path={}, has_token={}", url, path, !self.token.is_empty()));
         
         let body = serde_json::json!({
             "path": path
@@ -336,11 +337,28 @@ impl AlistClient {
             .post(&url)
             .headers(self.headers())
             .json(&body)
+            .timeout(Duration::from_secs(10))
             .send()
             .await?;
 
-        let resp: AlistResponse<ListResp> = response.json().await?;
+        let status = response.status();
+        let response_text = response.text().await.map_err(|e| {
+            log(&format!("读取 Alist 目录列表响应失败: status={}, error={}", status, e));
+            AlistError::Api(format!("读取目录响应失败: {}", e))
+        })?;
+        log(&format!("Alist 目录列表响应: status={}, body_length={}", status, response_text.len()));
+
+        if !status.is_success() {
+            log(&format!("Alist 目录列表 HTTP 状态失败: status={}, body={}", status, response_text));
+            return Err(AlistError::Api(format!("目录列表请求失败: HTTP {}", status)));
+        }
+
+        let resp: AlistResponse<ListResp> = serde_json::from_str(&response_text).map_err(|e| {
+            log(&format!("解析 Alist 目录列表响应失败: status={}, error={}, body={}", status, e, response_text));
+            AlistError::Api(format!("解析目录列表响应失败: {}; 原始响应: {}", e, response_text))
+        })?;
         
+        log(&format!("Alist 目录列表解析结果: code={}, message={}, has_data={}", resp.code, resp.message, resp.data.is_some()));
         if resp.code == 200 {
             Ok(resp.data.map(|d| d.content).unwrap_or_default())
         } else {
@@ -351,13 +369,17 @@ impl AlistClient {
 
 #[derive(Debug, serde::Deserialize, Default)]
 pub struct ListResp {
+    #[serde(default)]
     pub content: Vec<DirItem>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DirItem {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub size: u64,
+    #[serde(default)]
     pub is_dir: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified: Option<String>,

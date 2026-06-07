@@ -231,12 +231,20 @@ pub async fn write_client_log(message: String) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<String, String> {
+    log(&format!("收到 Alist 目录列表请求: base_url={}, username={}, has_token={}, path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), path));
     let client = AlistClient::new(config.alist.base_url, config.alist.token);
     
     let items = client
         .list_directory(&path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            log(&format!("Alist 目录列表失败: path={}, error={}", path, e));
+            e.to_string()
+        })?;
     
-    Ok(serde_json::to_string(&items).unwrap_or_default())
+    log(&format!("Alist 目录列表成功: path={}, item_count={}", path, items.len()));
+    serde_json::to_string(&items).map_err(|e| {
+        log(&format!("序列化 Alist 目录列表失败: path={}, error={}", path, e));
+        e.to_string()
+    })
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { DirItem } from '../types';
+import type { AppConfig, DirItem } from '../types';
 
 interface FolderPickerProps {
   value: string;
@@ -19,23 +19,35 @@ export function FolderPicker({ value, onChange, disabled }: FolderPickerProps) {
     setIsLoading(true);
     setError('');
     try {
-      const config = JSON.parse(localStorage.getItem('tauri:config') || '{}');
-      const alistConfig = config?.upload?.alist || { base_url: '', token: '' };
+      await invoke('write_client_log', { message: `打开 Alist 目录浏览: path=${path}` });
+      const config = await invoke<AppConfig>('get_config');
+      const alistConfig = config.alist;
       
       if (!alistConfig.base_url) {
         setError('请先配置 Alist 服务地址');
+        await invoke('write_client_log', { message: 'Alist 目录浏览失败: base_url 为空' });
         return;
       }
 
-      const items = await invoke<DirItem[]>('alist_list_dir', {
-        config: alistConfig,
+      if (!alistConfig.token) {
+        setError('请先登录获取 Token');
+        await invoke('write_client_log', { message: `Alist 目录浏览失败: token 为空, username=${alistConfig.username}` });
+        return;
+      }
+
+      const rawItems = await invoke<string>('alist_list_dir', {
+        config,
         path
       });
-      
-      setFolders(items.filter(item => item.is_dir));
+      const items = JSON.parse(rawItems || '[]') as DirItem[];
+      const directories = items.filter(item => item.is_dir);
+      await invoke('write_client_log', { message: `Alist 目录浏览成功: path=${path}, item_count=${items.length}, dir_count=${directories.length}` });
+      setFolders(directories);
       setCurrentPath(path);
     } catch (err: any) {
-      setError(err.toString());
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      await invoke('write_client_log', { message: `Alist 目录浏览异常: path=${path}, error=${message}` });
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +104,7 @@ export function FolderPicker({ value, onChange, disabled }: FolderPickerProps) {
               disabled={currentPath === '/'}
               className="small"
             >
-              ⬆ 上级
+              上级
             </button>
             <span className="current-path">{currentPath}</span>
             <button onClick={handleSelectCurrent} className="primary small">
@@ -115,7 +127,7 @@ export function FolderPicker({ value, onChange, disabled }: FolderPickerProps) {
                     className="folder-item"
                     onClick={() => handleSelectFolder(folder.name)}
                   >
-                    <span className="folder-icon">📁</span>
+                    <span className="folder-icon">[DIR]</span>
                     <span className="folder-name">{folder.name}</span>
                   </div>
                 ))}
