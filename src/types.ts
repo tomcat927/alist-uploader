@@ -54,6 +54,7 @@ export interface UploadConfig {
   max_retries: number;
   as_task: boolean;
   upload_method: string;
+  last_alist_path: string;
   file_exists_strategy: {
     strategy: string;
   };
@@ -85,6 +86,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     max_retries: 5,
     as_task: true,
     upload_method: 'stream',
+    last_alist_path: '/',
     file_exists_strategy: {
       strategy: 'ask',
     },

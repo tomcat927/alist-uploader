@@ -64,13 +64,13 @@ pub async fn get_config() -> Result<AppConfig, String> {
         log(&format!("读取磁盘配置失败: {}", e));
         e.to_string()
     })?;
-    log(&format!("读取磁盘配置: base_url={}, username={}, has_token={}, password_length={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len()));
+    log(&format!("读取磁盘配置: base_url={}, username={}, has_token={}, password_length={}, auto_login={}, last_alist_path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len(), config.alist.auto_login, config.upload.last_alist_path));
     Ok(config)
 }
 
 #[tauri::command]
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
-    log(&format!("收到保存配置请求: base_url={}, username={}, has_token={}, password_length={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len()));
+    log(&format!("收到保存配置请求: base_url={}, username={}, has_token={}, password_length={}, auto_login={}, last_alist_path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len(), config.alist.auto_login, config.upload.last_alist_path));
     Storage::save_config(&config).map_err(|e| {
         log(&format!("保存配置失败: {}", e));
         e.to_string()

@@ -112,6 +112,8 @@ pub struct AlistConfig {
     pub token: String,
     pub username: String,
     pub password: String,
+    #[serde(default = "default_auto_login")]
+    pub auto_login: bool,
 }
 
 impl Default for AlistConfig {
@@ -121,8 +123,13 @@ impl Default for AlistConfig {
             token: String::new(),
             username: String::new(),
             password: String::new(),
+            auto_login: true,
         }
     }
+}
+
+fn default_auto_login() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,6 +170,8 @@ pub struct UploadConfig {
     pub as_task: bool,
     #[serde(default = "default_upload_method")]
     pub upload_method: String,
+    #[serde(default = "default_alist_path")]
+    pub last_alist_path: String,
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
     pub schedule: Option<ScheduledUpload>,
@@ -173,6 +182,10 @@ fn default_upload_method() -> String {
     "stream".to_string()
 }
 
+fn default_alist_path() -> String {
+    "/".to_string()
+}
+
 impl Default for UploadConfig {
     fn default() -> Self {
         Self {
@@ -180,6 +193,7 @@ impl Default for UploadConfig {
             max_retries: 5,
             as_task: true,
             upload_method: "stream".to_string(),
+            last_alist_path: "/".to_string(),
             file_exists_strategy: FileExistsStrategy::default(),
             show_progress: false,
             schedule: Some(ScheduledUpload::default()),
