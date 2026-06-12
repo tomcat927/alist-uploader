@@ -21,6 +21,11 @@ export interface UploadTask {
   updated_at: string;
 }
 
+export interface AddToQueueResult {
+  tasks: UploadTask[];
+  warnings: string[];
+}
+
 export interface AlistConfig {
   base_url: string;
   token: string;
@@ -55,6 +60,8 @@ export interface UploadConfig {
   as_task: boolean;
   upload_method: string;
   last_alist_path: string;
+  block_files_over_5gb: boolean;
+  warn_files_over_4gb: boolean;
   file_exists_strategy: {
     strategy: string;
   };
@@ -87,6 +94,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     as_task: true,
     upload_method: 'stream',
     last_alist_path: '/',
+    block_files_over_5gb: true,
+    warn_files_over_4gb: true,
     file_exists_strategy: {
       strategy: 'ask',
     },

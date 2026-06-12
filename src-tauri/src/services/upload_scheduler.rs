@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use crate::models::*;
 use crate::services::alist_client::AlistClient;
-use crate::services::queue_manager::{is_root_alist_path, QueueManager};
+use crate::services::queue_manager::{is_root_alist_path, QueueManager, FOUR_GB, FIVE_GB};
 use crate::utils::log::log;
 
 pub struct UploadScheduler {
@@ -97,6 +97,20 @@ impl UploadScheduler {
         let alist_config = config.alist.clone();
         let upload_config = config.upload.clone();
         drop(config);
+
+        if upload_config.block_files_over_5gb && task.file.size > FIVE_GB {
+            let error = format!("115 网盘非会员单个文件最大支持 5GB，{} 超过限制，已阻止上传。", task.file.name);
+            log(&format!("上传任务被大文件保护拦截: task_id={}, file={}, size={}B, error={}", task.id, task.file.name, task.file.size, error));
+            task.mark_failed(error);
+            let _ = queue_manager.add_to_history(task.clone()).await;
+            let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
+            queue_manager.processing_tasks.remove(&task.id);
+            return;
+        }
+
+        if upload_config.warn_files_over_4gb && task.file.size > FOUR_GB {
+            log(&format!("上传大文件风险提示: task_id={}, file={}, size={}B, message=超过4GB，可能因1小时内未完成导致Token过期", task.id, task.file.name, task.file.size));
+        }
         
         let alist_client = AlistClient::new(
             alist_config.base_url.clone(),

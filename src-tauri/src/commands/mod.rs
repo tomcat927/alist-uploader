@@ -16,13 +16,13 @@ pub async fn add_to_queue(
     queue_manager: State<'_, QueueManager>,
     file_path: String,
     alist_path: String,
-) -> Result<Vec<UploadTask>, String> {
+) -> Result<AddToQueueResult, String> {
     log(&format!("添加文件到队列: file_path={}, alist_path={}", file_path, alist_path));
     let result = queue_manager
         .add_to_queue(file_path, alist_path)
         .await
         .map_err(|e| e.to_string())?;
-    log(&format!("添加到队列完成: 共 {} 个任务", result.len()));
+    log(&format!("添加到队列完成: 共 {} 个任务, warning_count={}", result.tasks.len(), result.warnings.len()));
     Ok(result)
 }
 
@@ -69,9 +69,9 @@ pub async fn get_config() -> Result<AppConfig, String> {
 }
 
 #[tauri::command]
-pub async fn save_config(config: AppConfig) -> Result<(), String> {
+pub async fn save_config(queue_manager: State<'_, QueueManager>, config: AppConfig) -> Result<(), String> {
     log(&format!("收到保存配置请求: base_url={}, username={}, has_token={}, password_length={}, auto_login={}, last_alist_path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len(), config.alist.auto_login, config.upload.last_alist_path));
-    Storage::save_config(&config).map_err(|e| {
+    queue_manager.save_config(config).await.map_err(|e| {
         log(&format!("保存配置失败: {}", e));
         e.to_string()
     })?;
@@ -176,6 +176,7 @@ pub async fn check_health(config: AppConfig) -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn alist_login(
+    queue_manager: State<'_, QueueManager>,
     base_url: String,
     username: String,
     password: String,
@@ -218,7 +219,7 @@ pub async fn alist_login(
     config.alist.username = username.clone();
     config.alist.password = password;
 
-    Storage::save_config(&config).map_err(|e| {
+    queue_manager.save_config(config.clone()).await.map_err(|e| {
         log(&format!("保存登录配置失败: base_url={}, username={}, has_token={}, error={}", normalized_base_url, username, !token.is_empty(), e));
         e.to_string()
     })?;

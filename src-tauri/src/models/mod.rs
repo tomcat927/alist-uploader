@@ -37,6 +37,12 @@ pub struct UploadTask {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddToQueueResult {
+    pub tasks: Vec<UploadTask>,
+    pub warnings: Vec<String>,
+}
+
 impl UploadTask {
     pub fn new(file_path: String, alist_path: String) -> Self {
         let file_name = file_path
@@ -172,6 +178,10 @@ pub struct UploadConfig {
     pub upload_method: String,
     #[serde(default = "default_alist_path")]
     pub last_alist_path: String,
+    #[serde(default = "default_true")]
+    pub block_files_over_5gb: bool,
+    #[serde(default = "default_true")]
+    pub warn_files_over_4gb: bool,
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
     pub schedule: Option<ScheduledUpload>,
@@ -186,6 +196,10 @@ fn default_alist_path() -> String {
     "/".to_string()
 }
 
+fn default_true() -> bool {
+    true
+}
+
 impl Default for UploadConfig {
     fn default() -> Self {
         Self {
@@ -194,6 +208,8 @@ impl Default for UploadConfig {
             as_task: true,
             upload_method: "stream".to_string(),
             last_alist_path: "/".to_string(),
+            block_files_over_5gb: true,
+            warn_files_over_4gb: true,
             file_exists_strategy: FileExistsStrategy::default(),
             show_progress: false,
             schedule: Some(ScheduledUpload::default()),

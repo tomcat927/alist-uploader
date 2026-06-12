@@ -7,6 +7,9 @@ use crate::models::*;
 use crate::utils::storage::Storage;
 use crate::utils::log::log;
 
+pub const FOUR_GB: u64 = 4 * 1024 * 1024 * 1024;
+pub const FIVE_GB: u64 = 5 * 1024 * 1024 * 1024;
+
 pub struct QueueManager {
     pub queue: Arc<RwLock<QueueData>>,
     pub history: Arc<RwLock<HistoryData>>,
@@ -32,8 +35,9 @@ impl QueueManager {
         })
     }
 
-    pub async fn add_to_queue(&self, file_path: String, alist_path: String) -> Result<Vec<UploadTask>, Box<dyn std::error::Error>> {
+    pub async fn add_to_queue(&self, file_path: String, alist_path: String) -> Result<AddToQueueResult, Box<dyn std::error::Error>> {
         let mut added_tasks = Vec::new();
+        let mut warnings = Vec::new();
         let target_root = normalize_alist_path(&alist_path);
         log(&format!("开始添加到上传队列: file_path={}, target_root={}", file_path, target_root));
         if is_root_alist_path(&target_root) {
@@ -47,6 +51,19 @@ impl QueueManager {
             log(&format!("检测到文件夹，递归收集完成: dir_path={}, file_count={}, target_root={}", file_path, files.len(), target_root));
             
             for file_info in files {
+                match self.validate_large_file(&file_info.name, file_info.size).await {
+                    Ok(Some(warning)) => {
+                        log(&format!("大文件风险提示: file_path={}, file_name={}, size={}B, warning={}", file_info.path, file_info.name, file_info.size, warning));
+                        warnings.push(warning);
+                    }
+                    Ok(None) => {}
+                    Err(message) => {
+                        log(&format!("文件夹内文件被大文件保护拦截: file_path={}, file_name={}, size={}B, error={}", file_info.path, file_info.name, file_info.size, message));
+                        warnings.push(message);
+                        continue;
+                    }
+                }
+
                 let task = self.add_single_file_to_queue(&file_info, &target_root).await?;
                 added_tasks.push(task);
             }
@@ -54,6 +71,10 @@ impl QueueManager {
             let (size, name) = crate::utils::fs::get_file_info(&file_path)
                 .await
                 .map_err(|e| e.to_string())?;
+            if let Some(warning) = self.validate_large_file(&name, size).await? {
+                log(&format!("大文件风险提示: file_path={}, file_name={}, size={}B, warning={}", file_path, name, size, warning));
+                warnings.push(warning);
+            }
             
             let mut task = UploadTask::new(file_path.clone(), target_root.clone());
             task.file.size = size;
@@ -67,8 +88,29 @@ impl QueueManager {
             
             added_tasks.push(task);
         }
+
+        if added_tasks.is_empty() && !warnings.is_empty() {
+            return Err(warnings.join("\n").into());
+        }
         
-        Ok(added_tasks)
+        Ok(AddToQueueResult { tasks: added_tasks, warnings })
+    }
+
+    async fn validate_large_file(&self, file_name: &str, size: u64) -> Result<Option<String>, String> {
+        let config = self.config.read().await;
+        let block_files_over_5gb = config.upload.block_files_over_5gb;
+        let warn_files_over_4gb = config.upload.warn_files_over_4gb;
+        drop(config);
+
+        if block_files_over_5gb && size > FIVE_GB {
+            return Err(format!("115 网盘非会员单个文件最大支持 5GB，{} 超过限制，已阻止加入上传队列。", file_name));
+        }
+
+        if warn_files_over_4gb && size > FOUR_GB {
+            return Ok(Some(format!("{} 超过 4GB。大文件上传耗时较长，若 1 小时内未完成可能因 Token 过期导致失败。建议在上传带宽较好时上传，或先压缩/分卷处理。", file_name)));
+        }
+
+        Ok(None)
     }
     
     async fn add_single_file_to_queue(&self, file_info: &crate::models::FileInfo, alist_path: &str) -> Result<UploadTask, Box<dyn std::error::Error>> {

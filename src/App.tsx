@@ -7,6 +7,8 @@ import { FolderPicker } from './components/FolderPicker';
 import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
 import './App.css';
 
+const FOUR_GB = 4 * 1024 * 1024 * 1024;
+
 function App() {
   const {
     queue,
@@ -97,11 +99,16 @@ function App() {
               await writeClientLog(`拖拽添加文件: count=${paths.length}, target_path=${targetPath}`);
               for (const filePath of paths) {
                 try {
-                  await addToFileQueue(filePath, targetPath);
+                  const result = await addToFileQueue(filePath, targetPath);
+                  if (result.warnings.length > 0) {
+                    window.alert(result.warnings.join('\n'));
+                    await writeClientLog(`拖拽添加文件触发大文件提示: warning_count=${result.warnings.length}`);
+                  }
                   await writeClientLog(`拖拽文件已加入队列: file_path=${filePath}, target_path=${targetPath}`);
                 } catch (error) {
                   const message = error instanceof Error ? error.message : String(error);
                   await writeClientLog(`拖拽文件加入队列失败: file_path=${filePath}, target_path=${targetPath}, error=${message}`);
+                  window.alert(message);
                   console.error('Failed to add file:', error);
                 }
               }
@@ -235,14 +242,21 @@ function App() {
         const files = Array.isArray(selected) ? selected : [selected];
         const targetPath = alistPathRef.current;
         await writeClientLog(`文件选择添加队列: count=${files.length}, target_path=${targetPath}`);
+        const warnings: string[] = [];
         for (const file of files) {
-          await addToFileQueue(file, targetPath);
+          const result = await addToFileQueue(file, targetPath);
+          warnings.push(...result.warnings);
           await writeClientLog(`选择文件已加入队列: file_path=${file}, target_path=${targetPath}`);
+        }
+        if (warnings.length > 0) {
+          window.alert(warnings.join('\n'));
+          await writeClientLog(`选择文件触发大文件提示: warning_count=${warnings.length}`);
         }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await writeClientLog(`选择文件加入队列失败: target_path=${alistPathRef.current}, error=${message}`);
+      window.alert(message);
       console.error('Failed to select files:', error);
     }
   };
@@ -450,7 +464,14 @@ function App() {
                       <tr key={task.id}>
                         <td>{task.file.name}</td>
                         <td>{formatFileSize(task.file.size)}</td>
-                        <td>{task.alist_path}</td>
+                        <td>
+                          <span>{task.alist_path}</span>
+                          {task.file.size > FOUR_GB && (
+                            <span className="large-file-badge" title="该文件超过 4GB。大文件上传耗时较长，若 1 小时内未完成可能因 Token 过期导致失败。建议在上传带宽较好时上传，或先压缩/分卷处理。">
+                              大文件风险
+                            </span>
+                          )}
+                        </td>
                         <td>
                           <span className={`status-badge status-${task.status}`}>
                             {task.status === 'pending' && '等待中'}
@@ -695,6 +716,36 @@ function App() {
                   })}
                 />
 <label htmlFor="showProgress">显示上传进度</label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="blockFilesOver5gb"
+                  checked={configForm.upload.block_files_over_5gb}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, block_files_over_5gb: e.target.checked }
+                  })}
+                />
+                <label htmlFor="blockFilesOver5gb">拦截超过 5GB 的单个文件（适用于 115 网盘非会员限制）</label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="warnFilesOver4gb"
+                  checked={configForm.upload.warn_files_over_4gb}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, warn_files_over_4gb: e.target.checked }
+                  })}
+                />
+                <label htmlFor="warnFilesOver4gb">对超过 4GB 的文件显示上传失败风险提示</label>
+              </div>
+
+              <div className="large-file-notice">
+                115 网盘非会员单个文件最大支持 5GB；超过 4GB 的文件上传耗时较长，若 1 小时内未完成可能因 Token 过期导致失败。
               </div>
               
               <div className="form-group radio-group">
