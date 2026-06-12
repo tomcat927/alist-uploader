@@ -142,7 +142,7 @@ pub async fn get_file_info(path: String) -> Result<FileInfo, String> {
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(FileInfo { path, name, size })
+    Ok(FileInfo { path, name, size, relative_path: None })
 }
 
 #[tauri::command]

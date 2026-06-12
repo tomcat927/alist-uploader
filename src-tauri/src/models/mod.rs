@@ -52,6 +52,7 @@ impl UploadTask {
                 path: file_path,
                 name: file_name,
                 size: 0,
+                relative_path: None,
             },
             alist_path,
             status: TaskStatus::Pending,
