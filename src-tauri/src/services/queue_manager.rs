@@ -130,11 +130,18 @@ impl QueueManager {
         Ok(())
     }
 
-    pub async fn get_next_pending_task(&self) -> Option<UploadTask> {
-        let queue = self.queue.read().await;
-        queue.tasks.iter()
-            .find(|t| t.status == TaskStatus::Pending)
-            .cloned()
+    pub async fn claim_next_pending_task(&self) -> Option<UploadTask> {
+        let mut queue = self.queue.write().await;
+        let task = queue.tasks.iter_mut()
+            .find(|t| t.status == TaskStatus::Pending)?;
+
+        task.mark_uploading();
+        let claimed = task.clone();
+        if let Err(error) = Storage::save_queue(&*queue) {
+            log(&format!("抢占待上传任务后保存队列失败: task_id={}, file={}, error={}", claimed.id, claimed.file.name, error));
+        }
+        log(&format!("抢占待上传任务: task_id={}, file={}, alist_path={}", claimed.id, claimed.file.name, claimed.alist_path));
+        Some(claimed)
     }
 
     pub async fn remove_completed_from_queue(&self, task_id: String) -> Result<(), Box<dyn std::error::Error>> {

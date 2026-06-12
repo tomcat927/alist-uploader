@@ -31,6 +31,7 @@ function App() {
     pauseUpload,
     retryUpload,
     testConnection,
+    setIsUploading,
     startHealthCheck,
     stopHealthCheck,
     login,
@@ -145,6 +146,28 @@ function App() {
 
     performAutoLogin();
   }, [config, configLoaded]);
+
+  useEffect(() => {
+    if (!isUploading) return;
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        await loadQueue();
+        await loadHistory();
+        const latestQueue = useAppStore.getState().queue;
+        const hasActiveTask = latestQueue.some(task => task.status === 'pending' || task.status === 'uploading');
+        if (!hasActiveTask) {
+          setIsUploading(false);
+          await writeClientLog('上传队列已完成，前端停止上传状态');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await writeClientLog(`上传队列刷新失败: ${message}`);
+      }
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [isUploading, loadQueue, loadHistory, setIsUploading]);
 
   const persistAlistPath = (path: string) => {
     const normalizedPath = normalizeAlistPath(path);

@@ -268,7 +268,7 @@ impl AlistClient {
         as_task: bool,
         upload_method: &str,
     ) -> Result<Option<String>, AlistError> {
-        let file_name = file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown").to_string();
+        let file_name = file_name_from_path(file_path);
         let target_path = join_alist_path(alist_path, &file_name);
         log(&format!("打开文件准备上传: file_path={}, file_name={}", file_path, file_name));
         
@@ -428,6 +428,15 @@ fn join_alist_path(dir: &str, file_name: &str) -> String {
     } else {
         format!("{}/{}", normalized_dir, file_name.trim_start_matches('/'))
     }
+}
+
+fn file_name_from_path(file_path: &str) -> String {
+    file_path
+        .rsplit(|c| c == '/' || c == '\\')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("unknown")
+        .to_string()
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
