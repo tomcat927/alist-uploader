@@ -26,6 +26,7 @@ export interface AlistConfig {
   token: string;
   username: string;
   password: string;
+  auto_login: boolean;
 }
 
 export interface DirItem {
@@ -76,6 +77,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     token: '',
     username: '',
     password: '',
+    auto_login: true,
   },
   upload: {
     concurrency: 1,

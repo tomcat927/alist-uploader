@@ -32,6 +32,7 @@ function App() {
     testConnection,
     startHealthCheck,
     stopHealthCheck,
+    login,
   } = useAppStore();
 
   const [alistPath, setAlistPath] = useState('/');
@@ -87,6 +88,26 @@ function App() {
 
   useEffect(() => {
     setConfigForm(normalizeAppConfig(config));
+    
+    // 自动登录逻辑
+    const performAutoLogin = async () => {
+      if (config.alist.auto_login && 
+          config.alist.username && 
+          config.alist.password && 
+          config.alist.base_url) {
+        try {
+          await writeClientLog(`自动登录: base_url=${config.alist.base_url}, username=${config.alist.username}`);
+          await login(config.alist.base_url, config.alist.username, config.alist.password);
+          await writeClientLog('自动登录成功');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          await writeClientLog(`自动登录失败: ${message}`);
+          console.error('Auto login failed:', error);
+        }
+      }
+    };
+
+    performAutoLogin();
   }, [config]);
 
   const handleSelectFiles = async () => {
@@ -403,6 +424,18 @@ function App() {
                     <span className={`eye-icon ${showPassword ? 'visible' : ''}`} />
                   </button>
                 </div>
+              </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="autoLogin"
+                  checked={configForm.alist.auto_login}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    alist: { ...configForm.alist, auto_login: e.target.checked }
+                  })}
+                />
+                <label htmlFor="autoLogin">启动时自动登录</label>
               </div>
               <div className="toolbar-actions">
                 <button 
