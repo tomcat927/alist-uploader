@@ -17,10 +17,13 @@ pub async fn add_to_queue(
     file_path: String,
     alist_path: String,
 ) -> Result<Vec<UploadTask>, String> {
-    queue_manager
+    log(&format!("添加文件到队列: file_path={}, alist_path={}", file_path, alist_path));
+    let result = queue_manager
         .add_to_queue(file_path, alist_path)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    log(&format!("添加到队列完成: 共 {} 个任务", result.len()));
+    Ok(result)
 }
 
 #[tauri::command]
@@ -78,6 +81,7 @@ pub async fn save_config(config: AppConfig) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn start_upload(queue_manager: State<'_, QueueManager>) -> Result<(), String> {
+    log("收到开始上传请求");
     let scheduler = 
         crate::services::upload_scheduler::UploadScheduler::new(queue_manager.inner().clone_inner());
     

@@ -270,8 +270,11 @@ impl AlistClient {
         let url = format!("{}/api/fs/put", self.base_url);
         
         let file_name = file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown").to_string();
+        log(&format!("打开文件准备上传: file_path={}, file_name={}", file_path, file_name));
+        
         let file = tokio::fs::File::open(file_path).await?;
         let file_len = file.metadata().await?.len();
+        log(&format!("文件已打开: file_name={}, size={}B, target_path={}/{}, as_task={}", file_name, file_len, alist_path, file_name, as_task));
         
         let file_part = multipart::Part::stream_with_length(reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file)), file_len)
             .file_name(file_name.clone());
@@ -288,13 +291,27 @@ impl AlistClient {
             request = request.query(&[("as_task", "true")]);
         }
 
-        let response = request.send().await?;
+        log(&format!("发送上传请求: url={}, file_name={}, size={}B", url, file_name, file_len));
+        let response = request.send().await.map_err(|e| {
+            log(&format!("上传请求失败: file_name={}, error={}", file_name, e));
+            e
+        })?;
         
-        let resp: AlistResponse<serde_json::Value> = response.json().await?;
+        let status = response.status();
+        log(&format!("上传响应: file_name={}, status={}", file_name, status));
+        
+        let resp: AlistResponse<serde_json::Value> = response.json().await.map_err(|e| {
+            log(&format!("解析上传响应失败: file_name={}, error={}", file_name, e));
+            AlistError::Request(e)
+        })?;
+        
+        log(&format!("上传响应解析: file_name={}, code={}, message={}", file_name, resp.code, resp.message));
         
         if resp.code == 200 {
+            log(&format!("上传成功: file_name={}", file_name));
             Ok(None)
         } else {
+            log(&format!("上传失败: file_name={}, code={}, message={}", file_name, resp.code, resp.message));
             Err(AlistError::Api(resp.message))
         }
     }
