@@ -238,6 +238,16 @@ body {
   font-size: 0.8125rem;
 }
 
+.target-path-error {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  background: var(--failed-bg);
+  color: #c62828;
+  font-size: 0.8125rem;
+}
+
 .upload-path-input {
   display: flex;
   align-items: center;

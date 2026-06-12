@@ -268,6 +268,11 @@ impl AlistClient {
         as_task: bool,
         upload_method: &str,
     ) -> Result<Option<String>, AlistError> {
+        if is_root_alist_path(alist_path) {
+            log(&format!("Alist 上传请求被拦截: file_path={}, alist_path=/, reason=根目录不是具体上传目录", file_path));
+            return Err(AlistError::Api("上传目标目录不能为根目录 /，请选择 Alist 中的具体目录".to_string()));
+        }
+
         let file_name = file_name_from_path(file_path);
         let target_path = join_alist_path(alist_path, &file_name);
         log(&format!("打开文件准备上传: file_path={}, file_name={}", file_path, file_name));
@@ -419,6 +424,11 @@ impl AlistClient {
             Err(AlistError::Api(resp.message))
         }
     }
+}
+
+fn is_root_alist_path(path: &str) -> bool {
+    let trimmed = path.trim().trim_end_matches('/');
+    trimmed.is_empty()
 }
 
 fn join_alist_path(dir: &str, file_name: &str) -> String {
