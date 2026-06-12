@@ -66,6 +66,7 @@ pub fn collect_files_from_dir(dir_path: &str) -> Result<Vec<FileInfo>, FsError> 
             // 计算相对于根目录的相对路径，用于在 Alist 中保持目录结构
             let relative_path = path
                 .strip_prefix(dir_path)
+                .ok()
                 .and_then(|p| p.to_str())
                 .unwrap_or("");
             
