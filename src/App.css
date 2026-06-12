@@ -203,10 +203,39 @@ body {
 .queue-toolbar, .history-toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 1.5rem;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.target-path-panel {
+  flex: 1;
+  min-width: 420px;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.target-path-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+
+.target-step {
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.target-path-hint {
+  margin-top: 0.5rem;
+  color: var(--text-light);
+  font-size: 0.8125rem;
 }
 
 .upload-path-input {

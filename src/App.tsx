@@ -12,6 +12,7 @@ function App() {
     queue,
     history,
     config,
+    configLoaded,
     isUploading,
     isLoading,
     alistConnected,
@@ -42,6 +43,16 @@ function App() {
   const [connectionMessage, setConnectionMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const autoLoginRef = useRef(false);
+  const configInitializedRef = useRef(false);
+  const alistPathRef = useRef('/');
+  const savePathTimerRef = useRef<number | null>(null);
+
+  const normalizeAlistPath = (path: string) => {
+    const trimmed = path.trim();
+    if (!trimmed || trimmed === '/') return '/';
+    const withPrefix = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    return withPrefix.replace(/\/+$/, '') || '/';
+  };
 
   useEffect(() => {
     loadQueue();
@@ -60,10 +71,15 @@ function App() {
           if (event.payload.type === 'drop') {
             const paths = event.payload.paths;
             if (Array.isArray(paths)) {
+              const targetPath = alistPathRef.current;
+              await writeClientLog(`拖拽添加文件: count=${paths.length}, target_path=${targetPath}`);
               for (const filePath of paths) {
                 try {
-                  await addToFileQueue(filePath, alistPath);
+                  await addToFileQueue(filePath, targetPath);
+                  await writeClientLog(`拖拽文件已加入队列: file_path=${filePath}, target_path=${targetPath}`);
                 } catch (error) {
+                  const message = error instanceof Error ? error.message : String(error);
+                  await writeClientLog(`拖拽文件加入队列失败: file_path=${filePath}, target_path=${targetPath}, error=${message}`);
                   console.error('Failed to add file:', error);
                 }
               }
@@ -84,11 +100,23 @@ function App() {
       if (unlistenFn) {
         unlistenFn();
       }
+      if (savePathTimerRef.current) {
+        window.clearTimeout(savePathTimerRef.current);
+      }
     };
-  }, [alistPath, loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
+  }, [loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
 
   useEffect(() => {
-    setConfigForm(normalizeAppConfig(config));
+    const normalizedConfig = normalizeAppConfig(config);
+    setConfigForm(normalizedConfig);
+
+    if (configLoaded && !configInitializedRef.current) {
+      const savedPath = normalizeAlistPath(normalizedConfig.upload.last_alist_path || '/');
+      setAlistPath(savedPath);
+      alistPathRef.current = savedPath;
+      configInitializedRef.current = true;
+      writeClientLog(`恢复上次上传目标目录: target_path=${savedPath}`);
+    }
     
     // 自动登录逻辑 - 只执行一次
     const performAutoLogin = async () => {
@@ -97,14 +125,14 @@ function App() {
         return;
       }
       
-      if (config.alist.auto_login && 
-          config.alist.username && 
-          config.alist.password && 
-          config.alist.base_url) {
+      if (configLoaded && normalizedConfig.alist.auto_login && 
+          normalizedConfig.alist.username && 
+          normalizedConfig.alist.password && 
+          normalizedConfig.alist.base_url) {
         autoLoginRef.current = true;
         try {
-          await writeClientLog(`自动登录: base_url=${config.alist.base_url}, username=${config.alist.username}`);
-          await login(config.alist.base_url, config.alist.username, config.alist.password);
+          await writeClientLog(`自动登录: base_url=${normalizedConfig.alist.base_url}, username=${normalizedConfig.alist.username}`);
+          await login(normalizedConfig.alist.base_url, normalizedConfig.alist.username, normalizedConfig.alist.password);
           await writeClientLog('自动登录成功');
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -116,7 +144,36 @@ function App() {
     };
 
     performAutoLogin();
-  }, [config]);
+  }, [config, configLoaded]);
+
+  const persistAlistPath = (path: string) => {
+    const normalizedPath = normalizeAlistPath(path);
+    setAlistPath(normalizedPath);
+    alistPathRef.current = normalizedPath;
+    setConfigForm(current => normalizeAppConfig({
+      ...current,
+      upload: { ...current.upload, last_alist_path: normalizedPath },
+    }));
+
+    if (savePathTimerRef.current) {
+      window.clearTimeout(savePathTimerRef.current);
+    }
+
+    savePathTimerRef.current = window.setTimeout(async () => {
+      const latestConfig = normalizeAppConfig(useAppStore.getState().config);
+      const nextConfig = normalizeAppConfig({
+        ...latestConfig,
+        upload: { ...latestConfig.upload, last_alist_path: alistPathRef.current },
+      });
+      try {
+        await writeClientLog(`保存上传目标目录: target_path=${alistPathRef.current}`);
+        await saveConfig(nextConfig);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await writeClientLog(`保存上传目标目录失败: target_path=${alistPathRef.current}, error=${message}`);
+      }
+    }, 500);
+  };
 
   const handleSelectFiles = async () => {
     try {
@@ -126,11 +183,16 @@ function App() {
       
       if (selected) {
         const files = Array.isArray(selected) ? selected : [selected];
+        const targetPath = alistPathRef.current;
+        await writeClientLog(`文件选择添加队列: count=${files.length}, target_path=${targetPath}`);
         for (const file of files) {
-          await addToFileQueue(file, alistPath);
+          await addToFileQueue(file, targetPath);
+          await writeClientLog(`选择文件已加入队列: file_path=${file}, target_path=${targetPath}`);
         }
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await writeClientLog(`选择文件加入队列失败: target_path=${alistPathRef.current}, error=${message}`);
       console.error('Failed to select files:', error);
     }
   };
@@ -236,13 +298,29 @@ function App() {
         {activeTab === 'queue' && (
           <div className="queue-tab">
             <div className="queue-toolbar">
-              <div className="upload-path-input">
-                <label>Alist 上传路径:</label>
-                <FolderPicker
-                  value={alistPath}
-                  onChange={setAlistPath}
-                  disabled={isUploading}
-                />
+              <div className="target-path-panel">
+                <div className="target-path-header">
+                  <span className="target-step">先选择上传位置</span>
+                  <button
+                    type="button"
+                    className="secondary small"
+                    onClick={() => persistAlistPath('/')}
+                    disabled={isUploading || alistPath === '/'}
+                  >
+                    使用根目录
+                  </button>
+                </div>
+                <div className="upload-path-input">
+                  <label>目标目录:</label>
+                  <FolderPicker
+                    value={alistPath}
+                    onChange={persistAlistPath}
+                    disabled={isUploading}
+                  />
+                </div>
+                <div className="target-path-hint">
+                  之后选择或拖拽的文件都会加入此目录；已加入队列的任务保留各自目标路径。
+                </div>
               </div>
               <div className="toolbar-actions">
                 <button onClick={handleSelectFiles} disabled={isUploading}>
@@ -280,7 +358,8 @@ function App() {
               {queue.length === 0 ? (
                 <div className="empty-state">
                   <p>队列为空</p>
-                  <p>拖拽文件到此处，或点击"选择文件"按钮添加</p>
+                  <p>当前目标目录：{alistPath}</p>
+                  <p>先选择目标目录，再拖拽文件或点击"选择文件"添加</p>
                 </div>
               ) : (
                 <table>

@@ -8,6 +8,7 @@ interface AppState {
   config: AppConfig;
   isUploading: boolean;
   isLoading: boolean;
+  configLoaded: boolean;
   alistConnected: boolean;
   alistServiceAvailable: boolean;
   alistChecking: boolean;
@@ -42,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   config: DEFAULT_APP_CONFIG,
   isUploading: false,
   isLoading: true,
+  configLoaded: false,
   alistConnected: false,
   alistServiceAvailable: false,
   alistChecking: false,
@@ -88,17 +90,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadConfig: async () => {
     try {
       const config = await invoke<AppConfig>('get_config');
-      set({ config: normalizeAppConfig(config) });
+      set({ config: normalizeAppConfig(config), configLoaded: true });
     } catch (error) {
       console.error('Failed to load config:', error);
-      set({ config: DEFAULT_APP_CONFIG });
+      set({ config: DEFAULT_APP_CONFIG, configLoaded: true });
     }
   },
 
   saveConfig: async (config) => {
     const normalizedConfig = normalizeAppConfig(config);
     await invoke('save_config', { config: normalizedConfig });
-    set({ config: normalizedConfig });
+    set({ config: normalizedConfig, configLoaded: true });
   },
 
   startUpload: async () => {

@@ -269,7 +269,7 @@ impl AlistClient {
         upload_method: &str,
     ) -> Result<Option<String>, AlistError> {
         let file_name = file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown").to_string();
-        let target_path = format!("{}/{}", alist_path, file_name);
+        let target_path = join_alist_path(alist_path, &file_name);
         log(&format!("打开文件准备上传: file_path={}, file_name={}", file_path, file_name));
         
         let file = tokio::fs::File::open(file_path).await?;
@@ -413,6 +413,20 @@ impl AlistClient {
         } else {
             Err(AlistError::Api(resp.message))
         }
+    }
+}
+
+fn join_alist_path(dir: &str, file_name: &str) -> String {
+    let normalized_dir = match dir.trim() {
+        "" | "/" => "/".to_string(),
+        value if value.starts_with('/') => value.trim_end_matches('/').to_string(),
+        value => format!("/{}", value.trim_end_matches('/')),
+    };
+
+    if normalized_dir == "/" {
+        format!("/{}", file_name.trim_start_matches('/'))
+    } else {
+        format!("{}/{}", normalized_dir, file_name.trim_start_matches('/'))
     }
 }
 

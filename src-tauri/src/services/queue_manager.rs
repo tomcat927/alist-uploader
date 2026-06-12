@@ -1,9 +1,11 @@
 pub use dashmap::DashMap;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use crate::models::*;
 use crate::utils::storage::Storage;
+use crate::utils::log::log;
 
 pub struct QueueManager {
     pub queue: Arc<RwLock<QueueData>>,
@@ -32,25 +34,27 @@ impl QueueManager {
 
     pub async fn add_to_queue(&self, file_path: String, alist_path: String) -> Result<Vec<UploadTask>, Box<dyn std::error::Error>> {
         let mut added_tasks = Vec::new();
+        let target_root = normalize_alist_path(&alist_path);
+        log(&format!("开始添加到上传队列: file_path={}, target_root={}", file_path, target_root));
         
         if crate::utils::fs::is_directory(&file_path) {
-            // 如果是目录，递归收集所有文件
             let files = crate::utils::fs::collect_files_from_dir(&file_path)
                 .map_err(|e| format!("收集文件夹文件失败: {}", e))?;
+            log(&format!("检测到文件夹，递归收集完成: dir_path={}, file_count={}, target_root={}", file_path, files.len(), target_root));
             
             for file_info in files {
-                let task = self.add_single_file_to_queue(&file_info, &alist_path).await?;
+                let task = self.add_single_file_to_queue(&file_info, &target_root).await?;
                 added_tasks.push(task);
             }
         } else {
-            // 单个文件
             let (size, name) = crate::utils::fs::get_file_info(&file_path)
                 .await
                 .map_err(|e| e.to_string())?;
             
-            let mut task = UploadTask::new(file_path.clone(), alist_path);
+            let mut task = UploadTask::new(file_path.clone(), target_root.clone());
             task.file.size = size;
             task.file.name = name;
+            log(&format!("添加单文件任务: file_path={}, file_name={}, size={}B, target_dir={}", file_path, task.file.name, size, target_root));
             
             let mut queue = self.queue.write().await;
             queue.tasks.push(task.clone());
@@ -64,16 +68,12 @@ impl QueueManager {
     }
     
     async fn add_single_file_to_queue(&self, file_info: &crate::models::FileInfo, alist_path: &str) -> Result<UploadTask, Box<dyn std::error::Error>> {
-        // 如果有相对路径，则构建完整的目标路径
         let target_path = if let Some(ref relative_path) = file_info.relative_path {
-            if relative_path.is_empty() {
-                alist_path.to_string()
-            } else {
-                format!("{}/{}", alist_path.trim_end_matches('/'), relative_path.trim_start_matches('/'))
-            }
+            build_target_dir(alist_path, relative_path)
         } else {
-            alist_path.to_string()
+            normalize_alist_path(alist_path)
         };
+        log(&format!("添加文件夹内文件任务: file_path={}, file_name={}, relative_path={}, target_dir={}", file_info.path, file_info.name, file_info.relative_path.as_deref().unwrap_or(""), target_path));
         
         let mut task = UploadTask::new(file_info.path.clone(), target_path);
         task.file.size = file_info.size;
@@ -198,5 +198,37 @@ impl QueueManager {
         );
         
         Ok(())
+    }
+}
+
+fn normalize_alist_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "/" {
+        return "/".to_string();
+    }
+
+    let with_prefix = if trimmed.starts_with('/') {
+        trimmed.to_string()
+    } else {
+        format!("/{}", trimmed)
+    };
+
+    with_prefix.trim_end_matches('/').to_string()
+}
+
+fn build_target_dir(root: &str, relative_path: &str) -> String {
+    let root = normalize_alist_path(root);
+    let relative_parent = Path::new(relative_path)
+        .parent()
+        .and_then(|parent| parent.to_str())
+        .unwrap_or("")
+        .trim_matches('/');
+
+    if relative_parent.is_empty() {
+        root
+    } else if root == "/" {
+        format!("/{}", relative_parent.replace('\\', "/"))
+    } else {
+        format!("{}/{}", root, relative_parent.replace('\\', "/"))
     }
 }
