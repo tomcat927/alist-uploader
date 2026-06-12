@@ -17,6 +17,8 @@ pub struct FileInfo {
     pub path: String,
     pub name: String,
     pub size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub relative_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

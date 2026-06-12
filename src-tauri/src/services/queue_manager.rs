@@ -30,18 +30,60 @@ impl QueueManager {
         })
     }
 
-    pub async fn add_to_queue(&self, file_path: String, alist_path: String) -> Result<UploadTask, Box<dyn std::error::Error>> {
-        let (size, name) = crate::utils::fs::get_file_info(&file_path)
-            .await
-            .map_err(|e| e.to_string())?;
+    pub async fn add_to_queue(&self, file_path: String, alist_path: String) -> Result<Vec<UploadTask>, Box<dyn std::error::Error>> {
+        let mut added_tasks = Vec::new();
         
-        let mut task = UploadTask::new(file_path.clone(), alist_path);
-        task.file.size = size;
-        task.file.name = name;
+        if crate::utils::fs::is_directory(&file_path) {
+            // 如果是目录，递归收集所有文件
+            let files = crate::utils::fs::collect_files_from_dir(&file_path)
+                .map_err(|e| format!("收集文件夹文件失败: {}", e))?;
+            
+            for file_info in files {
+                let task = self.add_single_file_to_queue(&file_info, &alist_path).await?;
+                added_tasks.push(task);
+            }
+        } else {
+            // 单个文件
+            let (size, name) = crate::utils::fs::get_file_info(&file_path)
+                .await
+                .map_err(|e| e.to_string())?;
+            
+            let mut task = UploadTask::new(file_path.clone(), alist_path);
+            task.file.size = size;
+            task.file.name = name;
+            
+            let mut queue = self.queue.write().await;
+            queue.tasks.push(task.clone());
+            Storage::save_queue(&*queue)?;
+            drop(queue);
+            
+            added_tasks.push(task);
+        }
+        
+        Ok(added_tasks)
+    }
+    
+    async fn add_single_file_to_queue(&self, file_info: &crate::models::FileInfo, alist_path: &str) -> Result<UploadTask, Box<dyn std::error::Error>> {
+        // 如果有相对路径，则构建完整的目标路径
+        let target_path = if let Some(ref relative_path) = file_info.relative_path {
+            if relative_path.is_empty() {
+                alist_path.to_string()
+            } else {
+                format!("{}/{}", alist_path.trim_end_matches('/'), relative_path.trim_start_matches('/'))
+            }
+        } else {
+            alist_path.to_string()
+        };
+        
+        let mut task = UploadTask::new(file_info.path.clone(), target_path);
+        task.file.size = file_info.size;
+        task.file.name = file_info.name.clone();
+        task.file.relative_path = file_info.relative_path.clone();
 
         let mut queue = self.queue.write().await;
         queue.tasks.push(task.clone());
         Storage::save_queue(&*queue)?;
+        drop(queue);
 
         Ok(task)
     }
