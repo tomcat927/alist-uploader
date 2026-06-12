@@ -44,8 +44,14 @@ pub struct LoginResp {
 pub struct AlistTaskResp {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub state: i32, // 0: pending, 1: running, 2: succeeded, 3: cancelled, 4: error
-    pub progress: i32,
+    #[serde(default)]
+    pub progress: f64,
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub error: String,
 }
 
 #[derive(Debug, serde::Deserialize, Default)]
@@ -337,12 +343,15 @@ impl AlistClient {
         log(&format!("上传响应解析: file_name={}, code={}, message={}", file_name, resp.code, resp.message));
         
         if resp.code == 200 {
-            log(&format!("上传成功: file_name={}", file_name));
+            log(&format!("上传请求已提交: file_name={}, as_task={}", file_name, as_task));
             if let Some(data) = &resp.data {
                 if let Some(task) = data.get("task") {
-                    let task_id = task.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let task_id = task.get("id").and_then(|v| v.as_str()).unwrap_or("");
                     let task_name = task.get("name").and_then(|v| v.as_str()).unwrap_or("unknown");
                     log(&format!("后台任务已创建: task_id={}, task_name={}", task_id, task_name));
+                    if !task_id.is_empty() {
+                        return Ok(Some(task_id.to_string()));
+                    }
                 }
             }
             Ok(None)
@@ -353,19 +362,47 @@ impl AlistClient {
     }
 
     pub async fn get_upload_tasks(&self) -> Result<Vec<AlistTaskResp>, AlistError> {
-        let url = format!("{}/api/admin/task/upload/list", self.base_url);
+        let url = format!("{}/api/task/upload/undone", self.base_url.trim_end_matches('/'));
+        log(&format!("查询 Alist 未完成上传任务: url={}", url));
         
         let response = self.client
             .get(&url)
             .headers(self.headers())
-            .query(&[("page", "1"), ("per_page", "100")])
             .send()
             .await?;
 
-        let resp: AlistResponse<AlistTaskListResp> = response.json().await?;
+        let status = response.status();
+        let response_text = response.text().await.map_err(|e| {
+            log(&format!("读取 Alist 未完成上传任务响应失败: status={}, error={}", status, e));
+            AlistError::Api(format!("读取任务列表响应失败: {}", e))
+        })?;
+
+        log(&format!("Alist 未完成上传任务响应: status={}, body_length={}", status, response_text.len()));
+
+        let resp: AlistResponse<serde_json::Value> = serde_json::from_str(&response_text).map_err(|e| {
+            log(&format!("解析 Alist 未完成上传任务响应失败: status={}, error={}, body={}", status, e, response_text));
+            AlistError::Api(format!("解析任务列表响应失败: {}; 原始响应: {}", e, response_text))
+        })?;
         
         if resp.code == 200 {
-            Ok(resp.data.map(|d| d.tasks).unwrap_or_default())
+            let Some(data) = resp.data else {
+                return Ok(Vec::new());
+            };
+
+            if data.is_array() {
+                serde_json::from_value(data).map_err(|e| {
+                    log(&format!("解析 Alist 未完成上传任务数组失败: error={}", e));
+                    AlistError::Api(format!("解析任务数组失败: {}", e))
+                })
+            } else if let Some(tasks) = data.get("tasks") {
+                serde_json::from_value(tasks.clone()).map_err(|e| {
+                    log(&format!("解析 Alist 未完成上传任务 tasks 字段失败: error={}", e));
+                    AlistError::Api(format!("解析任务数组失败: {}", e))
+                })
+            } else {
+                log(&format!("Alist 未完成上传任务响应 data 格式未知: data={}", data));
+                Ok(Vec::new())
+            }
         } else {
             Err(AlistError::Api(resp.message))
         }
