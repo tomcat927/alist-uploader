@@ -543,7 +543,39 @@ function App() {
                     upload: { ...configForm.upload, show_progress: e.target.checked }
                   })}
                 />
-                <label htmlFor="showProgress">显示上传进度</label>
+<label htmlFor="showProgress">显示上传进度</label>
+              </div>
+              
+              <div className="form-group radio-group">
+                <label>上传方式:</label>
+                <div className="radio-options">
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="uploadMethod"
+                      value="stream"
+                      checked={configForm.upload.upload_method === 'stream'}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { ...configForm.upload, upload_method: e.target.value }
+                      })}
+                    />
+                    Stream（流式上传）
+                  </label>
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="uploadMethod"
+                      value="form"
+                      checked={configForm.upload.upload_method === 'form'}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { ...configForm.upload, upload_method: e.target.value }
+                      })}
+                    />
+                    Form（表单上传）
+                  </label>
+                </div>
               </div>
               
               <div className="form-group checkbox-group">

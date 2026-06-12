@@ -151,7 +151,7 @@ impl UploadScheduler {
         alist_client: &AlistClient,
         config: &UploadConfig,
     ) -> Result<(), String> {
-        match alist_client.upload_file(&task.file.path, &task.alist_path, config.as_task).await {
+        match alist_client.upload_file(&task.file.path, &task.alist_path, config.as_task, &config.upload_method).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 log(&format!("Alist API 上传失败: file={}, error={}", task.file.name, e));
