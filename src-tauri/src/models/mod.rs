@@ -161,11 +161,16 @@ pub struct UploadConfig {
     pub concurrency: u8,
     pub max_retries: u32,
     pub as_task: bool,
+    #[serde(default = "default_upload_method")]
     pub upload_method: String,
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
+}
+
+fn default_upload_method() -> String {
+    "stream".to_string()
 }
 
 impl Default for UploadConfig {
