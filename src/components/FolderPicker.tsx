@@ -61,8 +61,7 @@ export function FolderPicker({ value, onChange, disabled }: FolderPickerProps) {
 
   const handleSelectFolder = (folderName: string) => {
     const newPath = currentPath === '/' ? `/${folderName}` : `${currentPath}/${folderName}`;
-    onChange(newPath);
-    setIsOpen(false);
+    loadFolders(newPath);
   };
 
   const handleNavigateUp = () => {
