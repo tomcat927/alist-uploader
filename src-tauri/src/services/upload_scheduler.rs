@@ -4,6 +4,7 @@ use tokio::time::sleep;
 use crate::models::*;
 use crate::services::alist_client::AlistClient;
 use crate::services::queue_manager::QueueManager;
+use crate::utils::log::log;
 
 pub struct UploadScheduler {
     queue_manager: Arc<QueueManager>,
@@ -16,13 +17,16 @@ impl UploadScheduler {
 
     pub async fn start_scheduler(&self) {
         if self.queue_manager.is_uploading() {
+            log("上传调度器已在运行中，跳过");
             return;
         }
 
+        log("上传调度器启动");
         self.queue_manager.set_uploading(true);
 
         loop {
             if !self.queue_manager.is_uploading() {
+                log("上传调度器收到停止信号，退出循环");
                 break;
             }
 
@@ -35,6 +39,7 @@ impl UploadScheduler {
             }
 
             if let Some(task) = self.queue_manager.get_next_pending_task().await {
+                log(&format!("取到待上传任务: file={}, size={}B, alist_path={}", task.file.name, task.file.size, task.alist_path));
                 let task_clone = task.clone();
                 let queue_manager = Arc::clone(&self.queue_manager);
                 
@@ -55,6 +60,7 @@ impl UploadScheduler {
         }
 
         self.queue_manager.set_uploading(false);
+        log("上传调度器已停止");
     }
 
     async fn can_start_new_task(&self, config: &AppConfig) -> bool {
@@ -72,6 +78,8 @@ impl UploadScheduler {
     }
 
     async fn execute_upload(queue_manager: Arc<QueueManager>, mut task: UploadTask) {
+        log(&format!("开始上传: file={}, size={}B, alist_path={}, retry={}", task.file.name, task.file.size, task.alist_path, task.retry_count));
+        
         let config = queue_manager.config.read().await;
         let alist_config = config.alist.clone();
         let upload_config = config.upload.clone();
@@ -86,20 +94,24 @@ impl UploadScheduler {
             alist_config.token.clone(),
         );
 
+        log(&format!("调用 Alist API 上传: file_path={}, alist_path={}, as_task={}", task.file.path, task.alist_path, upload_config.as_task));
         let result = Self::upload_with_retry(&queue_manager, &mut task, &alist_client, &upload_config).await;
 
         queue_manager.processing_tasks.remove(&task.id);
 
         match result {
             Ok(_) => {
+                log(&format!("上传成功: file={}, size={}B, alist_path={}", task.file.name, task.file.size, task.alist_path));
                 task.mark_completed();
                 let _ = queue_manager.add_to_history(task.clone()).await;
                 let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
             }
             Err(e) => {
+                log(&format!("上传出错: file={}, error={}, retry_count={}", task.file.name, e, task.retry_count));
                 let config = queue_manager.config.read().await;
                 let max_retries = config.upload.max_retries;
                 if task.retry_count >= max_retries {
+                    log(&format!("达到最大重试次数({})，标记为失败: file={}", max_retries, task.file.name));
                     task.mark_failed(e.clone());
                     let _ = queue_manager.add_to_history(task.clone()).await;
                     let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
@@ -120,10 +132,12 @@ impl UploadScheduler {
                     drop(app_config);
                     
                     // 停止整个队列
+                    log(&format!("停止整个上传队列: 文件上传失败: file={}", task.file.name));
                     queue_manager.set_uploading(false);
                     queue_manager.set_stop_after_current(true);
                 } else {
                     drop(config);
+                    log(&format!("上传失败，准备重试: file={}, retry={}/{}", task.file.name, task.retry_count + 1, max_retries));
                     task.increment_retry();
                     let _ = queue_manager.update_task(task.id.clone(), task).await;
                 }
@@ -139,7 +153,10 @@ impl UploadScheduler {
     ) -> Result<(), String> {
         match alist_client.upload_file(&task.file.path, &task.alist_path, config.as_task).await {
             Ok(_) => Ok(()),
-            Err(e) => Err(e.to_string()),
+            Err(e) => {
+                log(&format!("Alist API 上传失败: file={}, error={}", task.file.name, e));
+                Err(e.to_string())
+            }
         }
     }
 
