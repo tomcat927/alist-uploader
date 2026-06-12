@@ -409,7 +409,12 @@ impl AlistClient {
         
         log(&format!("Alist 目录列表解析结果: code={}, message={}, has_data={}", resp.code, resp.message, resp.data.is_some()));
         if resp.code == 200 {
-            Ok(resp.data.map(|d| d.content).unwrap_or_default())
+            let content = resp
+                .data
+                .and_then(|d| d.content)
+                .unwrap_or_default();
+            log(&format!("Alist 目录列表内容: path={}, item_count={}", path, content.len()));
+            Ok(content)
         } else {
             Err(AlistError::Api(resp.message))
         }
@@ -442,7 +447,7 @@ fn file_name_from_path(file_path: &str) -> String {
 #[derive(Debug, serde::Deserialize, Default)]
 pub struct ListResp {
     #[serde(default)]
-    pub content: Vec<DirItem>,
+    pub content: Option<Vec<DirItem>>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
