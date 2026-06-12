@@ -18,17 +18,24 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: package-lock.json
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install frontend dependencies
-        run: |
-          npm install
-          npm install @rollup/rollup-win32-x64-msvc @tauri-apps/cli-win32-x64-msvc --save-optional
+      - name: Cache Rust dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}-${{ hashFiles('src-tauri/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Build frontend
-        run: npm run build
+      - name: Install frontend dependencies
+        run: npm ci
 
       - name: Build Tauri App for Windows
         uses: tauri-apps/tauri-action@v0
@@ -64,7 +71,7 @@ jobs:
       #       New-Item -ItemType Directory -Path "temp-release" -Force | Out-Null
       #       Push-Location temp-release
       #       git init -b main
-      #       git remote add origin https://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@github.com/tomcat927/alist-uploader-releases.git
+      #       git remote add origin https://x-access-token:${{ secrets.RELEASES_REPO_TOKEN }}@github.com/tomcat927/alist-uploader-releases.git
       #       Pop-Location
       #     }
       #     
