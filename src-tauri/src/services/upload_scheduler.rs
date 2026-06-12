@@ -169,16 +169,97 @@ impl UploadScheduler {
     }
 
     async fn upload_with_retry(
-        _queue_manager: &Arc<QueueManager>,
+        queue_manager: &Arc<QueueManager>,
         task: &mut UploadTask,
         alist_client: &AlistClient,
         config: &UploadConfig,
     ) -> Result<(), String> {
         match alist_client.upload_file(&task.file.path, &task.alist_path, config.as_task, &config.upload_method).await {
-            Ok(_) => Ok(()),
+            Ok(Some(alist_task_id)) => {
+                log(&format!("等待 Alist 后台上传任务完成: file={}, alist_task_id={}", task.file.name, alist_task_id));
+                Self::wait_for_alist_task(queue_manager, task, alist_client, &alist_task_id).await
+            }
+            Ok(None) => Ok(()),
             Err(e) => {
                 log(&format!("Alist API 上传失败: file={}, error={}", task.file.name, e));
                 Err(e.to_string())
+            }
+        }
+    }
+
+    async fn wait_for_alist_task(
+        queue_manager: &Arc<QueueManager>,
+        task: &mut UploadTask,
+        alist_client: &AlistClient,
+        alist_task_id: &str,
+    ) -> Result<(), String> {
+        let mut missing_checks = 0;
+
+        loop {
+            sleep(Duration::from_secs(2)).await;
+
+            let tasks = alist_client.get_upload_tasks().await.map_err(|e| {
+                log(&format!("查询 Alist 后台上传任务失败: file={}, alist_task_id={}, error={}", task.file.name, alist_task_id, e));
+                e.to_string()
+            })?;
+
+            let Some(alist_task) = tasks.into_iter().find(|item| item.id == alist_task_id) else {
+                let exists = alist_client.check_file_exists(&task.alist_path, &task.file.name).await.map_err(|e| {
+                    log(&format!("确认 Alist 后台上传结果失败: file={}, alist_task_id={}, error={}", task.file.name, alist_task_id, e));
+                    e.to_string()
+                })?;
+
+                if exists {
+                    log(&format!("Alist 后台上传任务已从未完成列表消失且目标文件存在: file={}, alist_task_id={}", task.file.name, alist_task_id));
+                    task.progress = 100;
+                    let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
+                    return Ok(());
+                }
+
+                missing_checks += 1;
+                if missing_checks < 3 {
+                    log(&format!("Alist 后台上传任务已从未完成列表消失，等待目标文件出现在目录中: file={}, alist_task_id={}, check={}/3", task.file.name, alist_task_id, missing_checks));
+                    continue;
+                }
+
+                let error = format!("Alist 后台上传任务已消失，但目标目录中未找到文件 {}", task.file.name);
+                log(&format!("Alist 后台上传结果确认失败: file={}, alist_task_id={}, error={}", task.file.name, alist_task_id, error));
+                return Err(error);
+            };
+
+            missing_checks = 0;
+
+            let progress = alist_task.progress.clamp(0.0, 100.0) as u8;
+            if task.progress != progress {
+                task.progress = progress;
+                let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
+            }
+
+            log(&format!(
+                "Alist 后台上传任务状态: file={}, alist_task_id={}, state={}, status={}, progress={}%, error={}",
+                task.file.name,
+                alist_task_id,
+                alist_task.state,
+                alist_task.status,
+                alist_task.progress,
+                alist_task.error
+            ));
+
+            if alist_task.state == 2 {
+                log(&format!("Alist 后台上传任务完成: file={}, alist_task_id={}", task.file.name, alist_task_id));
+                task.progress = 100;
+                let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
+                return Ok(());
+            }
+
+            if alist_task.state == 3 || alist_task.state == 4 || !alist_task.error.is_empty() {
+                let error = if alist_task.error.is_empty() {
+                    format!("Alist 后台上传任务失败: state={}, status={}", alist_task.state, alist_task.status)
+                } else {
+                    alist_task.error
+                };
+                log(&format!("Alist 后台上传任务失败: file={}, alist_task_id={}, error={}", task.file.name, alist_task_id, error));
+                return Err(error);
             }
         }
     }
