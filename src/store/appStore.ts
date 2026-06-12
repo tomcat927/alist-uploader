@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { DEFAULT_APP_CONFIG, normalizeAppConfig, type UploadTask, type AppConfig, type TaskStatus } from '../types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AddToQueueResult, type UploadTask, type AppConfig, type TaskStatus } from '../types';
 
 interface AppState {
   queue: UploadTask[];
@@ -16,7 +16,7 @@ interface AppState {
 
   // Actions
   loadQueue: () => Promise<void>;
-  addToFileQueue: (filePath: string, alistPath: string) => Promise<UploadTask>;
+  addToFileQueue: (filePath: string, alistPath: string) => Promise<AddToQueueResult>;
   removeFromQueue: (taskId: string) => Promise<void>;
   clearQueue: () => Promise<void>;
   loadHistory: () => Promise<void>;
@@ -60,9 +60,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addToFileQueue: async (filePath, alistPath) => {
-    const tasks = await invoke<UploadTask[]>('add_to_queue', { filePath, alistPath });
-    set(state => ({ queue: [...state.queue, ...tasks] }));
-    return tasks[0];
+    const result = await invoke<AddToQueueResult>('add_to_queue', { filePath, alistPath });
+    set(state => ({ queue: [...state.queue, ...result.tasks] }));
+    return result;
   },
 
   removeFromQueue: async (taskId) => {

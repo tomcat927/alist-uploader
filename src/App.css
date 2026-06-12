@@ -331,6 +331,16 @@ button.disabled {
   font-size: 0.875rem;
 }
 
+.large-file-notice {
+  margin: 0.75rem 0 1rem;
+  padding: 0.75rem;
+  background: #fff3e0;
+  border: 1px solid #ffb74d;
+  border-radius: 4px;
+  color: #e65100;
+  font-size: 0.875rem;
+}
+
 button {
   padding: 0.5rem 1rem;
   border: 1px solid var(--border-color);
@@ -428,6 +438,17 @@ tr:last-child td {
   display: inline-block;
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.large-file-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  background: #fff3e0;
+  color: #e65100;
   font-size: 0.75rem;
   font-weight: 500;
 }
