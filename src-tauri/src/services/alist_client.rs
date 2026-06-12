@@ -266,22 +266,15 @@ impl AlistClient {
         file_path: &str,
         alist_path: &str,
         as_task: bool,
+        upload_method: &str,
     ) -> Result<Option<String>, AlistError> {
-        // 使用 /api/fs/form 处理 multipart 表单上传
-        let url = format!("{}/api/fs/form", self.base_url);
-        
         let file_name = file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown").to_string();
         let target_path = format!("{}/{}", alist_path, file_name);
         log(&format!("打开文件准备上传: file_path={}, file_name={}", file_path, file_name));
         
         let file = tokio::fs::File::open(file_path).await?;
         let file_len = file.metadata().await?.len();
-        log(&format!("文件已打开: file_name={}, size={}B, target_path={}, as_task={}", file_name, file_len, target_path, as_task));
-        
-        let file_part = multipart::Part::stream_with_length(reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file)), file_len)
-            .file_name(file_name.clone());
-        
-        let form = multipart::Form::new().part("file", file_part);
+        log(&format!("文件已打开: file_name={}, size={}B, target_path={}, as_task={}, method={}", file_name, file_len, target_path, as_task, upload_method));
 
         let mut headers = self.headers();
         headers.insert("File-Path", target_path.parse().unwrap());
@@ -289,17 +282,44 @@ impl AlistClient {
             headers.insert("As-Task", "true".parse().unwrap());
         }
 
-        log(&format!("发送上传请求: url={}, file_name={}, size={}B, as_task={}", url, file_name, file_len, as_task));
-        let response = self.client
-            .put(&url)
-            .headers(headers)
-            .multipart(form)
-            .send()
-            .await
-            .map_err(|e| {
-                log(&format!("上传请求失败: file_name={}, error={}", file_name, e));
-                e
-            })?;
+        let url;
+        let response;
+
+        if upload_method == "form" {
+            // 表单上传
+            url = format!("{}/api/fs/form", self.base_url);
+            let file_part = multipart::Part::stream_with_length(
+                reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file)),
+                file_len,
+            ).file_name(file_name.clone());
+            let form = multipart::Form::new().part("file", file_part);
+
+            log(&format!("发送表单上传请求: url={}, file_name={}, size={}B", url, file_name, file_len));
+            response = self.client
+                .put(&url)
+                .headers(headers)
+                .multipart(form)
+                .send()
+                .await;
+        } else {
+            // 默认流式上传
+            url = format!("{}/api/fs/put", self.base_url);
+            headers.insert("Content-Length", file_len.to_string().parse().unwrap());
+            let body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file));
+
+            log(&format!("发送流式上传请求: url={}, file_name={}, size={}B", url, file_name, file_len));
+            response = self.client
+                .put(&url)
+                .headers(headers)
+                .body(body)
+                .send()
+                .await;
+        }
+
+        let response = response.map_err(|e| {
+            log(&format!("上传请求失败: file_name={}, error={}", file_name, e));
+            e
+        })?;
         
         let status = response.status();
         log(&format!("上传响应: file_name={}, status={}", file_name, status));
@@ -313,7 +333,6 @@ impl AlistClient {
         
         if resp.code == 200 {
             log(&format!("上传成功: file_name={}", file_name));
-            // 处理 as_task 模式下的任务信息
             if let Some(data) = &resp.data {
                 if let Some(task) = data.get("task") {
                     let task_id = task.get("id").and_then(|v| v.as_str()).unwrap_or("unknown");

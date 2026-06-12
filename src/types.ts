@@ -53,6 +53,7 @@ export interface UploadConfig {
   concurrency: number;
   max_retries: number;
   as_task: boolean;
+  upload_method: string;
   file_exists_strategy: {
     strategy: string;
   };
@@ -83,6 +84,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     concurrency: 1,
     max_retries: 5,
     as_task: true,
+    upload_method: 'stream',
     file_exists_strategy: {
       strategy: 'ask',
     },
