@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use crate::models::*;
 use crate::services::alist_client::AlistClient;
-use crate::services::queue_manager::QueueManager;
+use crate::services::queue_manager::{is_root_alist_path, QueueManager};
 use crate::utils::log::log;
 
 pub struct UploadScheduler {
@@ -83,6 +83,15 @@ impl UploadScheduler {
 
     async fn execute_upload(queue_manager: Arc<QueueManager>, mut task: UploadTask) {
         log(&format!("开始上传: file={}, size={}B, alist_path={}, retry={}", task.file.name, task.file.size, task.alist_path, task.retry_count));
+        if is_root_alist_path(&task.alist_path) {
+            let error = "上传目标目录不能为根目录 /，请选择 Alist 中的具体目录".to_string();
+            log(&format!("上传任务被拦截: task_id={}, file={}, alist_path=/, error={}", task.id, task.file.name, error));
+            task.mark_failed(error);
+            let _ = queue_manager.add_to_history(task.clone()).await;
+            let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
+            queue_manager.processing_tasks.remove(&task.id);
+            return;
+        }
         
         let config = queue_manager.config.read().await;
         let alist_config = config.alist.clone();

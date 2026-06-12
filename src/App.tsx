@@ -42,6 +42,7 @@ function App() {
   const [configForm, setConfigForm] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [uploadPathError, setUploadPathError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
@@ -53,6 +54,23 @@ function App() {
     if (!trimmed || trimmed === '/') return '/';
     const withPrefix = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
     return withPrefix.replace(/\/+$/, '') || '/';
+  };
+
+  const isRootAlistPath = (path: string) => normalizeAlistPath(path) === '/';
+
+  const getRootPathMessage = () => '请选择 Alist 中的具体目录后再添加或上传文件，根目录 / 仅用于浏览存储入口。';
+
+  const ensureConcreteAlistPath = async (path: string, action: string) => {
+    if (!isRootAlistPath(path)) {
+      setUploadPathError('');
+      return true;
+    }
+
+    const message = getRootPathMessage();
+    setUploadPathError(message);
+    await writeClientLog(`${action} 被拦截: target_path=/, reason=根目录不是具体上传目录`);
+    window.alert(message);
+    return false;
   };
 
   useEffect(() => {
@@ -73,6 +91,9 @@ function App() {
             const paths = event.payload.paths;
             if (Array.isArray(paths)) {
               const targetPath = alistPathRef.current;
+              if (!(await ensureConcreteAlistPath(targetPath, '拖拽添加文件'))) {
+                return;
+              }
               await writeClientLog(`拖拽添加文件: count=${paths.length}, target_path=${targetPath}`);
               for (const filePath of paths) {
                 try {
@@ -115,6 +136,7 @@ function App() {
       const savedPath = normalizeAlistPath(normalizedConfig.upload.last_alist_path || '/');
       setAlistPath(savedPath);
       alistPathRef.current = savedPath;
+      setUploadPathError(isRootAlistPath(savedPath) ? getRootPathMessage() : '');
       configInitializedRef.current = true;
       writeClientLog(`恢复上次上传目标目录: target_path=${savedPath}`);
     }
@@ -173,6 +195,7 @@ function App() {
     const normalizedPath = normalizeAlistPath(path);
     setAlistPath(normalizedPath);
     alistPathRef.current = normalizedPath;
+    setUploadPathError(isRootAlistPath(normalizedPath) ? getRootPathMessage() : '');
     setConfigForm(current => normalizeAppConfig({
       ...current,
       upload: { ...current.upload, last_alist_path: normalizedPath },
@@ -200,6 +223,10 @@ function App() {
 
   const handleSelectFiles = async () => {
     try {
+      if (!(await ensureConcreteAlistPath(alistPathRef.current, '选择文件'))) {
+        return;
+      }
+
       const selected = await open({
         multiple: true,
       });
@@ -221,6 +248,15 @@ function App() {
   };
 
   const handleStartUpload = async () => {
+    const rootTargetTask = queue.find(task => isRootAlistPath(task.alist_path));
+    if (rootTargetTask) {
+      const message = `队列中存在目标目录为 / 的任务：${rootTargetTask.file.name}。请删除该任务后选择具体目录重新添加。`;
+      setUploadPathError(message);
+      await writeClientLog(`开始上传被拦截: task_id=${rootTargetTask.id}, file=${rootTargetTask.file.name}, target_path=/`);
+      window.alert(message);
+      return;
+    }
+
     await startUpload();
   };
 
@@ -274,6 +310,8 @@ function App() {
     if (!isoString) return '-';
     return new Date(isoString).toLocaleString('zh-CN');
   };
+
+  const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
   if (isLoading) {
     return <div className="loading">加载中...</div>;
@@ -344,6 +382,16 @@ function App() {
                 <div className="target-path-hint">
                   之后选择或拖拽的文件都会加入此目录；已加入队列的任务保留各自目标路径。
                 </div>
+                {uploadPathError && (
+                  <div className="target-path-error">
+                    {uploadPathError}
+                  </div>
+                )}
+                {hasRootTargetInQueue && (
+                  <div className="target-path-error">
+                    队列中存在目标目录为 / 的任务，请删除后选择具体目录重新添加。
+                  </div>
+                )}
               </div>
               <div className="toolbar-actions">
                 <button onClick={handleSelectFiles} disabled={isUploading}>
@@ -352,8 +400,9 @@ function App() {
                 {!isUploading ? (
                   <button 
                     onClick={handleStartUpload} 
-                    disabled={queue.length === 0}
+                    disabled={queue.length === 0 || hasRootTargetInQueue}
                     className="primary"
+                    title={hasRootTargetInQueue ? '队列中存在目标目录为 / 的任务，请删除后重新添加' : undefined}
                   >
                     开始上传
                   </button>

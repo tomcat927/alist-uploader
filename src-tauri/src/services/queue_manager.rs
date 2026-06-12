@@ -36,6 +36,10 @@ impl QueueManager {
         let mut added_tasks = Vec::new();
         let target_root = normalize_alist_path(&alist_path);
         log(&format!("开始添加到上传队列: file_path={}, target_root={}", file_path, target_root));
+        if is_root_alist_path(&target_root) {
+            log(&format!("添加到上传队列被拦截: file_path={}, target_root=/, reason=根目录不是具体上传目录", file_path));
+            return Err("请选择 Alist 中的具体目录后再添加文件，根目录 / 仅用于浏览存储入口".into());
+        }
         
         if crate::utils::fs::is_directory(&file_path) {
             let files = crate::utils::fs::collect_files_from_dir(&file_path)
@@ -206,6 +210,10 @@ impl QueueManager {
         
         Ok(())
     }
+}
+
+pub fn is_root_alist_path(path: &str) -> bool {
+    normalize_alist_path(path) == "/"
 }
 
 fn normalize_alist_path(path: &str) -> String {
