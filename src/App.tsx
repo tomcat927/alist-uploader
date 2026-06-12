@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
-import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { invoke } from '@tauri-apps/api/core';
 import { FolderPicker } from './components/FolderPicker';
 import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
@@ -50,22 +50,38 @@ function App() {
     startHealthCheck();
     
     // 监听文件拖拽事件
-    const unlisten = listen('tauri://file-drop', async (event) => {
-      const paths = event.payload as string[];
-      if (Array.isArray(paths)) {
-        for (const filePath of paths) {
-          try {
-            await addToFileQueue(filePath, alistPath);
-          } catch (error) {
-            console.error('Failed to add file:', error);
+    let unlistenFn: (() => void) | null = null;
+
+    const setupDragDrop = async () => {
+      try {
+        const unlisten = await getCurrentWebview().onDragDropEvent(async (event) => {
+          if (event.payload.type === 'drop') {
+            const paths = event.payload.paths;
+            if (Array.isArray(paths)) {
+              for (const filePath of paths) {
+                try {
+                  await addToFileQueue(filePath, alistPath);
+                } catch (error) {
+                  console.error('Failed to add file:', error);
+                }
+              }
+            }
           }
-        }
+        });
+
+        unlistenFn = unlisten;
+      } catch (error) {
+        console.error('Failed to setup drag drop:', error);
       }
-    });
+    };
+
+    setupDragDrop();
 
     return () => {
       stopHealthCheck();
-      unlisten.then((fn) => fn());
+      if (unlistenFn) {
+        unlistenFn();
+      }
     };
   }, [alistPath, loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
 
