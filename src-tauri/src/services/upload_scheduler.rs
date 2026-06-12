@@ -38,10 +38,11 @@ impl UploadScheduler {
                 continue;
             }
 
-            if let Some(task) = self.queue_manager.get_next_pending_task().await {
+            if let Some(task) = self.queue_manager.claim_next_pending_task().await {
                 log(&format!("取到待上传任务: file={}, size={}B, alist_path={}", task.file.name, task.file.size, task.alist_path));
                 let task_clone = task.clone();
                 let queue_manager = Arc::clone(&self.queue_manager);
+                self.queue_manager.processing_tasks.insert(task.id.clone(), task.clone());
                 
                 tokio::spawn(async move {
                     Self::execute_upload(queue_manager, task_clone).await;
@@ -53,6 +54,9 @@ impl UploadScheduler {
                         sleep(Duration::from_millis(500)).await;
                     }
                 }
+            } else if self.get_active_task_count().await == 0 {
+                log("没有待上传任务且无活动任务，上传调度器自动结束");
+                break;
             } else {
                 drop(config);
                 sleep(Duration::from_millis(1000)).await;
@@ -85,10 +89,6 @@ impl UploadScheduler {
         let upload_config = config.upload.clone();
         drop(config);
         
-        task.mark_uploading();
-        let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
-        queue_manager.processing_tasks.insert(task.id.clone(), task.clone());
-
         let alist_client = AlistClient::new(
             alist_config.base_url.clone(),
             alist_config.token.clone(),
