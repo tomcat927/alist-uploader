@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -41,6 +41,7 @@ function App() {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const autoLoginRef = useRef(false);
 
   useEffect(() => {
     loadQueue();
@@ -89,12 +90,18 @@ function App() {
   useEffect(() => {
     setConfigForm(normalizeAppConfig(config));
     
-    // 自动登录逻辑
+    // 自动登录逻辑 - 只执行一次
     const performAutoLogin = async () => {
+      // 使用 ref 确保自动登录只执行一次
+      if (autoLoginRef.current) {
+        return;
+      }
+      
       if (config.alist.auto_login && 
           config.alist.username && 
           config.alist.password && 
           config.alist.base_url) {
+        autoLoginRef.current = true;
         try {
           await writeClientLog(`自动登录: base_url=${config.alist.base_url}, username=${config.alist.username}`);
           await login(config.alist.base_url, config.alist.username, config.alist.password);
@@ -103,6 +110,7 @@ function App() {
           const message = error instanceof Error ? error.message : String(error);
           await writeClientLog(`自动登录失败: ${message}`);
           console.error('Auto login failed:', error);
+          // 登录失败后不重试，避免无限循环
         }
       }
     };

@@ -16,7 +16,7 @@ pub async fn add_to_queue(
     queue_manager: State<'_, QueueManager>,
     file_path: String,
     alist_path: String,
-) -> Result<UploadTask, String> {
+) -> Result<Vec<UploadTask>, String> {
     queue_manager
         .add_to_queue(file_path, alist_path)
         .await

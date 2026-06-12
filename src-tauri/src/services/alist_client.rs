@@ -269,18 +269,19 @@ impl AlistClient {
     ) -> Result<Option<String>, AlistError> {
         let url = format!("{}/api/fs/put", self.base_url);
         
-        let file_data = tokio::fs::read(file_path).await?;
+        let file_name = file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown").to_string();
+        let file = tokio::fs::File::open(file_path).await?;
+        let file_len = file.metadata().await?.len();
         
-        let form = multipart::Form::new()
-            .part("file", multipart::Part::bytes(file_data).file_name(
-                file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown").to_string()
-            ));
+        let file_part = multipart::Part::stream_with_length(reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file)), file_len)
+            .file_name(file_name.clone());
+        
+        let form = multipart::Form::new().part("file", file_part);
 
         let mut request = self.client
             .put(&url)
             .headers(self.headers())
-            .query(&[("path", &format!("{}/{}", alist_path, 
-                file_path.split('/').last().or_else(|| file_path.split('\\').last()).unwrap_or("unknown")))])
+            .query(&[("path", &format!("{}/{}", alist_path, file_name))])
             .multipart(form);
 
         if as_task {

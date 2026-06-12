@@ -58,9 +58,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   addToFileQueue: async (filePath, alistPath) => {
-    const task = await invoke<UploadTask>('add_to_queue', { filePath, alistPath });
-    set(state => ({ queue: [...state.queue, task] }));
-    return task;
+    const tasks = await invoke<UploadTask[]>('add_to_queue', { filePath, alistPath });
+    set(state => ({ queue: [...state.queue, ...tasks] }));
+    return tasks[0];
   },
 
   removeFromQueue: async (taskId) => {
