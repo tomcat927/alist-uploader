@@ -39,13 +39,11 @@ jobs:
         with:
           tauriScript: npm run tauri
 
-      - name: Upload MSI artifact
+      - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: alist-uploader-${{ github.sha }}
-          path: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+          path: src-tauri/target/release/bundle/nsis/*.exe
           retention-days: 30
 
       # - name: Push to releases repository
