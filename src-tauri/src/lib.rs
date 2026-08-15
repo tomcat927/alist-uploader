@@ -87,6 +87,7 @@ pub fn run() {
             crate::commands::check_health,
             crate::commands::alist_login,
             crate::commands::write_client_log,
+            crate::commands::test_notification,
             crate::commands::alist_list_dir,
         ])
         .run(tauri::generate_context!());

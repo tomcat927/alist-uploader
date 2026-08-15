@@ -309,6 +309,28 @@ function App() {
     await saveConfig(normalizeAppConfig(configForm));
   };
 
+  const handleTestNotification = async () => {
+    const notification = configForm.upload.notification;
+    if (!notification || !notification.enabled) {
+      window.alert('请先启用失败通知');
+      return;
+    }
+    if (!notification.webhook_url.trim()) {
+      window.alert('请先填写 Webhook URL');
+      return;
+    }
+    await writeClientLog(`点击测试通知: has_webhook=${Boolean(notification.webhook_url)}, channels=${notification.channels.join(',')}`);
+    try {
+      await invoke('test_notification', { config: notification });
+      await writeClientLog('测试通知发送成功');
+      window.alert('测试通知发送成功，请检查飞书机器人消息');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await writeClientLog(`测试通知发送失败: ${message}`);
+      window.alert(`测试通知发送失败: ${message}`);
+    }
+  };
+
   const formatFileSize = (bytes: number) => {
     const units = ['B', 'KB', 'MB', 'GB'];
     let size = bytes;
@@ -823,6 +845,11 @@ function App() {
                   </div>
                   <div className="notification-notice">
                     ℹ️ 当文件上传失败超过重试阈值时，将发送通知并停止队列
+                  </div>
+                  <div className="settings-actions">
+                    <button onClick={handleTestNotification} className="secondary small">
+                      发送测试通知
+                    </button>
                   </div>
                 </div>
               )}

@@ -319,17 +319,64 @@ impl UploadScheduler {
             }
         });
 
-        if let Err(e) = reqwest::Client::new()
-            .post(webhook_url)
-            .header("Content-Type", "application/json")
-            .json(&payload)
-            .send()
-            .await
-        {
+        if let Err(e) = Self::post_feishu_card(webhook_url, &payload).await {
             log::error!("发送飞书通知失败: {}", e);
         } else {
             log::info!("飞书通知发送成功");
         }
+    }
+
+    pub async fn test_notification(notification: &NotificationConfig) -> Result<(), String> {
+        let message = "## 测试通知\n\n\
+            **内容**: 这是一条来自 Alist Uploader 的测试通知\n\
+            **状态**: 通知配置有效\n\n\
+            _如果你看到这条消息，说明 Webhook 配置正确_";
+
+        let payload = serde_json::json!({
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": "Alist Uploader 测试通知"
+                    },
+                    "template": "green"
+                },
+                "elements": [{
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": message
+                    }
+                }]
+            }
+        });
+
+        for channel in &notification.channels {
+            match channel.as_str() {
+                "feishu" => {
+                    Self::post_feishu_card(&notification.webhook_url, &payload)
+                        .await
+                        .map_err(|e| format!("发送飞书测试通知失败: {}", e))?;
+                }
+                _ => {
+                    log::warn!("不支持的通知渠道: {}", channel);
+                }
+            }
+        }
+
+        log::info!("测试通知发送成功");
+        Ok(())
+    }
+
+    async fn post_feishu_card(webhook_url: &str, payload: &serde_json::Value) -> Result<(), reqwest::Error> {
+        reqwest::Client::new()
+            .post(webhook_url)
+            .header("Content-Type", "application/json")
+            .json(payload)
+            .send()
+            .await
+            .map(|_| ())
     }
 
     pub fn stop_scheduler(&self) {

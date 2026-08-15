@@ -235,6 +235,28 @@ pub async fn write_client_log(message: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn test_notification(config: NotificationConfig) -> Result<(), String> {
+    log(&format!("收到测试通知请求: channels={:?}, has_webhook={}", config.channels, !config.webhook_url.is_empty()));
+
+    if config.webhook_url.trim().is_empty() {
+        return Err("Webhook URL 不能为空".to_string());
+    }
+    if config.channels.is_empty() {
+        return Err("未配置通知渠道".to_string());
+    }
+
+    crate::services::upload_scheduler::UploadScheduler::test_notification(&config)
+        .await
+        .map_err(|e| {
+            log(&format!("发送测试通知失败: {}", e));
+            e
+        })?;
+
+    log("测试通知发送成功");
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<String, String> {
     log(&format!("收到 Alist 目录列表请求: base_url={}, username={}, has_token={}, path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), path));
     let client = AlistClient::new(config.alist.base_url, config.alist.token);
