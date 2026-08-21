@@ -24,6 +24,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -37,6 +38,14 @@
         "installerIcon": "icons/icon.ico",
         "headerImage": "icons/icon.ico"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3NDI2N0ZENDJGQ0UwQTMKUldTajRQeEMvV2RDMTJoWUZFcDBiNldSU3E5dU1oVVdQbjlzRXowUzd0cUpiODRtRVYvTUN3eFUK",
+      "endpoints": [
+        "https://github.com/tomcat927/alist-uploader/releases/latest/download/latest.json"
+      ]
     }
   }
 }

@@ -4,6 +4,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { invoke } from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
 import { FolderPicker } from './components/FolderPicker';
 import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
 import './App.css';
@@ -349,6 +351,30 @@ function App() {
       const message = error instanceof Error ? error.message : String(error);
       await writeClientLog(`测试通知发送失败: ${message}`);
       window.alert(`测试通知发送失败: ${message}`);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    await writeClientLog('点击检查更新');
+    try {
+      const update = await check();
+      if (update) {
+        if (window.confirm(`发现新版本 ${update.version}，是否下载安装？`)) {
+          await update.downloadAndInstall((event) => {
+            if (event.event === 'Finished') {
+              writeClientLog('更新下载完成');
+            }
+          });
+          await writeClientLog('更新已安装，即将重启');
+          await relaunch();
+        }
+      } else {
+        window.alert('已是最新版本');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await writeClientLog(`检查更新失败: ${message}`);
+      window.alert(`检查更新失败: ${message}`);
     }
   };
 
@@ -997,6 +1023,9 @@ function App() {
             </div>
 
             <div className="settings-actions">
+              <button onClick={handleCheckUpdate} className="secondary">
+                检查更新
+              </button>
               <button onClick={handleSaveConfig} className="primary">
                 保存配置
               </button>
