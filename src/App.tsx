@@ -450,7 +450,7 @@ function App() {
                     type="button"
                     className="secondary small"
                     onClick={() => persistAlistPath('/')}
-                    disabled={isUploading || alistPath === '/'}
+                    disabled={alistPath === '/'}
                   >
                     使用根目录
                   </button>
@@ -460,7 +460,6 @@ function App() {
                   <FolderPicker
                     value={alistPath}
                     onChange={persistAlistPath}
-                    disabled={isUploading}
                   />
                 </div>
                 <div className="target-path-hint">
@@ -478,7 +477,7 @@ function App() {
                 )}
               </div>
               <div className="toolbar-actions">
-                <button onClick={handleSelectFiles} disabled={isUploading}>
+                <button onClick={handleSelectFiles}>
                   选择文件
                 </button>
                 {!isUploading ? (
