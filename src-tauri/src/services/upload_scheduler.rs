@@ -212,6 +212,7 @@ impl UploadScheduler {
                 if exists {
                     log(&format!("Alist 后台上传任务已从未完成列表消失且目标文件存在: file={}, alist_task_id={}", task.file.name, alist_task_id));
                     task.progress = 100;
+                    task.speed = 0;
                     let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
                     return Ok(());
                 }
@@ -229,8 +230,28 @@ impl UploadScheduler {
 
             missing_checks = 0;
 
-            let progress = alist_task.progress.clamp(0.0, 100.0) as u8;
-            if task.progress != progress {
+            let progress_f = alist_task.progress.clamp(0.0, 100.0);
+            let progress = progress_f as u8;
+            let now = chrono::Utc::now();
+
+            // 速度计算：仅当进度推进时，用 (Δprogress × size / 100) / Δt 估算字节/秒
+            // 进度未变则保留上次速度（与 OpenList 前端一致）；首次记录基线，不产出速度
+            if task.prev_ts.is_none() {
+                task.prev_progress = progress_f;
+                task.prev_ts = Some(now);
+            } else if (progress_f - task.prev_progress).abs() > f64::EPSILON {
+                let prev_ts = task.prev_ts.unwrap();
+                let dt = (now - prev_ts).num_milliseconds();
+                if dt > 0 {
+                    let delta_bytes = ((progress_f - task.prev_progress).abs() / 100.0) * task.file.size as f64;
+                    let speed = (delta_bytes / dt * 1000.0) as u64;
+                    task.speed = speed;
+                }
+                task.prev_progress = progress_f;
+                task.prev_ts = Some(now);
+            }
+
+            if task.progress != progress || task.speed > 0 {
                 task.progress = progress;
                 let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
             }
@@ -248,6 +269,7 @@ impl UploadScheduler {
             if alist_task.state == 2 {
                 log(&format!("Alist 后台上传任务完成: file={}, alist_task_id={}", task.file.name, alist_task_id));
                 task.progress = 100;
+                task.speed = 0;
                 let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
                 return Ok(());
             }

@@ -35,6 +35,15 @@ pub struct UploadTask {
     pub duration: Option<u64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// 上传速度（字节/秒），仅 status=uploading 时有效，前端用于显示
+    #[serde(default)]
+    pub speed: u64,
+    /// 上一次轮询的进度百分比（0.0-100.0），仅内存使用，不持久化
+    #[serde(skip)]
+    pub prev_progress: f64,
+    /// 上一次轮询的时间戳，仅内存使用，不持久化
+    #[serde(skip)]
+    pub prev_ts: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -70,6 +79,9 @@ impl UploadTask {
             duration: None,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            speed: 0,
+            prev_progress: 0.0,
+            prev_ts: None,
         }
     }
 
@@ -83,6 +95,9 @@ impl UploadTask {
         self.start_time = Some(Utc::now());
         self.updated_at = Utc::now();
         self.error = None;
+        self.speed = 0;
+        self.prev_progress = 0.0;
+        self.prev_ts = None;
     }
 
     pub fn mark_completed(&mut self) {
@@ -90,6 +105,7 @@ impl UploadTask {
         self.end_time = Some(Utc::now());
         self.progress = 100;
         self.updated_at = Utc::now();
+        self.speed = 0;
         if let Some(start) = self.start_time {
             self.duration = Some((Utc::now() - start).num_seconds() as u64);
         }
@@ -100,6 +116,7 @@ impl UploadTask {
         self.end_time = Some(Utc::now());
         self.error = Some(error);
         self.updated_at = Utc::now();
+        self.speed = 0;
         if let Some(start) = self.start_time {
             self.duration = Some((Utc::now() - start).num_seconds() as u64);
         }

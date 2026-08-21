@@ -342,6 +342,22 @@ function App() {
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   };
 
+  const formatSpeed = (bytesPerSec: number) => {
+    if (bytesPerSec <= 0) return '';
+    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    let speed = bytesPerSec;
+    let unitIndex = 0;
+    while (speed >= 1024 && unitIndex < units.length - 1) {
+      speed /= 1024;
+      unitIndex++;
+    }
+    return `${speed.toFixed(2)} ${units[unitIndex]}`;
+  };
+
+  const totalUploadSpeed = queue
+    .filter(t => t.status === 'uploading')
+    .reduce((sum, t) => sum + (t.speed || 0), 0);
+
   const formatDateTime = (isoString?: string) => {
     if (!isoString) return '-';
     return new Date(isoString).toLocaleString('zh-CN');
@@ -365,7 +381,11 @@ function App() {
             </span>
           </div>
           <span className={`status-indicator ${isUploading ? 'active' : ''}`}>
-            {isUploading ? '上传中' : '空闲'}
+            {isUploading && totalUploadSpeed > 0
+              ? `上传中 ${formatSpeed(totalUploadSpeed)}`
+              : isUploading
+                ? '上传中'
+                : '空闲'}
           </span>
         </div>
       </header>
@@ -497,7 +517,7 @@ function App() {
                         <td>
                           <span className={`status-badge status-${task.status}`}>
                             {task.status === 'pending' && '等待中'}
-                            {task.status === 'uploading' && '上传中'}
+                            {task.status === 'uploading' && `上传中 ${task.progress}%`}
                             {task.status === 'completed' && '已完成'}
                             {task.status === 'failed' && '失败'}
                             {task.status === 'cancelled' && '已取消'}
