@@ -342,6 +342,13 @@ function App() {
     return `${size.toFixed(2)} ${units[unitIndex]}`;
   };
 
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`;
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  };
+
   const formatSpeed = (bytesPerSec: number) => {
     if (bytesPerSec <= 0) return '';
     const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
@@ -587,7 +594,7 @@ function App() {
                           </span>
                         </td>
                         <td>{formatDateTime(task.end_time)}</td>
-                        <td>{task.duration ? `${task.duration}s` : '-'}</td>
+                        <td>{task.duration ? formatDuration(task.duration) : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
