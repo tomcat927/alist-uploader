@@ -67,6 +67,7 @@ export interface UploadConfig {
     strategy: string;
   };
   show_progress: boolean;
+  notify_on_complete: boolean;
   schedule?: ScheduledUpload;
   notification?: NotificationConfig;
 }
@@ -101,6 +102,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       strategy: 'ask',
     },
     show_progress: false,
+    notify_on_complete: false,
     schedule: {
       enabled: false,
       start_time: '03:00',

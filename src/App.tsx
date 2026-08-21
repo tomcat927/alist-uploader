@@ -3,6 +3,7 @@ import { useAppStore } from './store/appStore';
 import { open } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { invoke } from '@tauri-apps/api/core';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { FolderPicker } from './components/FolderPicker';
 import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
 import './App.css';
@@ -50,6 +51,7 @@ function App() {
   const configInitializedRef = useRef(false);
   const alistPathRef = useRef('/');
   const savePathTimerRef = useRef<number | null>(null);
+  const notifiedTaskIds = useRef<Set<string>>(new Set());
 
   const normalizeAlistPath = (path: string) => {
     const trimmed = path.trim();
@@ -188,6 +190,25 @@ function App() {
         if (!hasActiveTask) {
           setIsUploading(false);
           await writeClientLog('上传队列已完成，前端停止上传状态');
+        }
+
+        // 检测新完成的任务，发送系统通知
+        const notifyOnComplete = useAppStore.getState().config.upload.notify_on_complete;
+        if (notifyOnComplete) {
+          const perm = await isPermissionGranted();
+          if (!perm) {
+            await requestPermission();
+          }
+          for (const task of latestQueue) {
+            if (task.status === 'completed' && !notifiedTaskIds.current.has(task.id)) {
+              notifiedTaskIds.current.add(task.id);
+              sendNotification({ title: '上传完成', body: `文件 ${task.file.name} 上传成功` });
+            }
+            if (task.status === 'failed' && !notifiedTaskIds.current.has(task.id)) {
+              notifiedTaskIds.current.add(task.id);
+              sendNotification({ title: '上传失败', body: `${task.file.name}: ${task.error || '未知错误'}` });
+            }
+          }
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -765,6 +786,19 @@ function App() {
                   })}
                 />
 <label htmlFor="showProgress">显示上传进度</label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="notifyOnComplete"
+                  checked={configForm.upload.notify_on_complete}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, notify_on_complete: e.target.checked }
+                  })}
+                />
+                <label htmlFor="notifyOnComplete">上传完成后发送系统通知</label>
               </div>
 
               <div className="form-group checkbox-group">

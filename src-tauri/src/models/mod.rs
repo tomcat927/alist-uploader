@@ -201,6 +201,8 @@ pub struct UploadConfig {
     pub warn_files_over_4gb: bool,
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
+    #[serde(default)]
+    pub notify_on_complete: bool,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
 }
@@ -229,6 +231,7 @@ impl Default for UploadConfig {
             warn_files_over_4gb: true,
             file_exists_strategy: FileExistsStrategy::default(),
             show_progress: false,
+            notify_on_complete: false,
             schedule: Some(ScheduledUpload::default()),
             notification: None,
         }
