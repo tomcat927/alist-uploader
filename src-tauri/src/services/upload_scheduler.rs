@@ -244,7 +244,7 @@ impl UploadScheduler {
                 let dt = (now - prev_ts).num_milliseconds();
                 if dt > 0 {
                     let delta_bytes = ((progress_f - task.prev_progress).abs() / 100.0) * task.file.size as f64;
-                    let speed = (delta_bytes / dt * 1000.0) as u64;
+                    let speed = (delta_bytes / dt as f64 * 1000.0) as u64;
                     task.speed = speed;
                 }
                 task.prev_progress = progress_f;
