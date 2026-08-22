@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Fragment } from 'react';
 import { useAppStore } from './store/appStore';
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -54,6 +54,7 @@ function App() {
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSizeText, setDownloadSizeText] = useState('');
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const autoLoginRef = useRef(false);
@@ -621,8 +622,19 @@ function App() {
                   </thead>
                   <tbody>
                     {queue.map(task => (
-                      <tr key={task.id}>
-                        <td>{task.file.name}</td>
+                      <Fragment key={task.id}>
+                      <tr>
+                        <td>
+                          <button
+                            type="button"
+                            className={`task-name-toggle ${expandedTaskId === task.id ? 'expanded' : ''}`}
+                            onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                            aria-expanded={expandedTaskId === task.id}
+                          >
+                            <span className="task-expand-icon" aria-hidden="true">▶</span>
+                            <span className="task-file-name">{task.file.name}</span>
+                          </button>
+                        </td>
                         <td>{formatFileSize(task.file.size)}</td>
                         <td>
                           <span>{task.alist_path}</span>
@@ -659,6 +671,23 @@ function App() {
                           </button>
                         </td>
                       </tr>
+                      {expandedTaskId === task.id && (
+                        <tr className="task-detail-row">
+                          <td colSpan={6}>
+                            <div className="task-path-detail">
+                              <div>
+                                <span className="task-path-label">本地路径</span>
+                                <code title={task.file.path}>{task.file.path}</code>
+                              </div>
+                              <div>
+                                <span className="task-path-label">Alist 目标</span>
+                                <code>{task.alist_path}</code>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

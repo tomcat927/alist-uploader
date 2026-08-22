@@ -478,6 +478,80 @@ tr:last-child td {
   color: #c2185b;
 }
 
+/* Task name expand toggle */
+.task-name-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.task-expand-icon {
+  display: inline-flex;
+  width: 1rem;
+  height: 1rem;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  font-size: 0.625rem;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.task-name-toggle.expanded .task-expand-icon {
+  transform: rotate(90deg);
+}
+
+.task-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-detail-row td {
+  padding: 0.75rem 1rem 0.75rem 2.25rem;
+  background: #fafafa;
+  border-top: none;
+}
+
+.task-detail-row:hover {
+  background: #fafafa;
+}
+
+.task-path-detail {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.task-path-detail > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.task-path-label {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.task-path-detail code {
+  min-width: 0;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.8125rem;
+  color: var(--text-color);
+  word-break: break-all;
+}
+
 /* Settings Tab */
 .settings-tab {
   max-width: 800px;
