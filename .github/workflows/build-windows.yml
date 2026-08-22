@@ -43,12 +43,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Auto-increment version with build number
+      - name: Set version from China time
         shell: pwsh
         run: |
-          $currentVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.*)"' | ForEach-Object { $$_.Matches.Groups[1].Value }
-          $parts = $currentVersion -split '\.'
-          $newVersion = "$($parts[0]).$($parts[1]).${{ github.run_number }}"
+          $chinaTime = (Get-Date).ToUniversalTime().AddHours(8)
+          $newVersion = "{0}.{1}.{2}" -f $chinaTime.Year, ($chinaTime.Month * 100 + $chinaTime.Day), ($chinaTime.Hour * 100 + $chinaTime.Minute)
+          echo "China time: $chinaTime"
           echo "Setting version to $newVersion"
           (Get-Content src-tauri/Cargo.toml) -replace '^version = ".*"', "version = `"$newVersion`"" | Set-Content src-tauri/Cargo.toml
           (Get-Content src-tauri/tauri.conf.json) -replace '"version": ".*"', "`"version`": `"$newVersion`"" | Set-Content src-tauri/tauri.conf.json
