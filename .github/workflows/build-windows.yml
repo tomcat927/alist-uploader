@@ -56,6 +56,7 @@ jobs:
           Select-String -Path src-tauri/Cargo.toml -Pattern "^version"
           echo "Updated tauri.conf.json:"
           Select-String -Path src-tauri/tauri.conf.json -Pattern '"version"'
+          Add-Content -Path $env:GITHUB_ENV -Value "APP_VERSION=$newVersion"
 
 
       - name: Clean stale local bundle output
@@ -75,7 +76,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           try {
-            $assets = gh release view latest --repo $env:GITHUB_REPOSITORY --json assets -q '.assets[].name' 2>$null
+            $assets = gh release view latest --repo $env:GITHUB_REPOSITORY --json assets -q '.assets[].name' 2>$null | ForEach-Object { $_.Trim() }
             if (-not $assets) {
               Write-Host "No existing release, skipping cleanup"
               exit 0
@@ -106,15 +107,16 @@ jobs:
         run: |
           $release = "latest"
           $repo = $env:GITHUB_REPOSITORY
+          $version = $env:APP_VERSION
 
           # 查找 release 目录下的构建产物
           $bundleDir = "src-tauri\target\release\bundle"
           $artifacts = @()
           if (Test-Path "$bundleDir\nsis") {
-            Get-ChildItem "$bundleDir\nsis\*.exe", "$bundleDir\nsis\*.exe.sig", "$bundleDir\nsis\*.zip", "$bundleDir\nsis\*.zip.sig" -ErrorAction SilentlyContinue | ForEach-Object { $artifacts += $_.FullName }
+            Get-ChildItem "$bundleDir\nsis\*" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$version*" -and ($_.Name -like '*.exe' -or $_.Name -like '*.exe.sig' -or $_.Name -like '*.zip' -or $_.Name -like '*.zip.sig') } | ForEach-Object { $artifacts += $_.FullName }
           }
           if (Test-Path "$bundleDir\msi") {
-            Get-ChildItem "$bundleDir\msi\*.msi", "$bundleDir\msi\*.msi.sig", "$bundleDir\msi\*.zip", "$bundleDir\msi\*.zip.sig" -ErrorAction SilentlyContinue | ForEach-Object { $artifacts += $_.FullName }
+            Get-ChildItem "$bundleDir\msi\*" -ErrorAction SilentlyContinue | Where-Object { $_.Name -like "*$version*" -and ($_.Name -like '*.msi' -or $_.Name -like '*.msi.sig' -or $_.Name -like '*.zip' -or $_.Name -like '*.zip.sig') } | ForEach-Object { $artifacts += $_.FullName }
           }
           # 查找 latest.json
           $latestJsonPath = "src-tauri\target\release\latest.json"
@@ -147,7 +149,6 @@ jobs:
           }
 
       - name: Patch latest.json
-      - name: Patch latest.json
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -161,6 +162,7 @@ jobs:
           Write-Host "Using fresh latest.json from build output"
           Copy-Item $latestJson "latest.json"
           $json = Get-Content -Raw latest.json
+          $json = $json -replace 'https://gh-proxy\.org/', ''
           $json = $json -replace 'https://github\.com/tomcat927/alist-uploader/releases/download/latest/', 'https://gh-proxy.org/https://github.com/tomcat927/alist-uploader/releases/download/latest/'
           Set-Content -Path latest.json -Value $json -NoNewline
           gh release upload latest latest.json --clobber
