@@ -22,6 +22,14 @@ export interface UploadTask {
   speed: number;
 }
 
+export interface BlockedFileRecord {
+  file_path: string;
+  file_name: string;
+  file_size: number;
+  reason: string;
+  blocked_at: string;
+}
+
 export interface AddToQueueResult {
   tasks: UploadTask[];
   warnings: string[];

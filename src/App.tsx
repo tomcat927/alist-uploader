@@ -8,7 +8,7 @@ import { isPermissionGranted, requestPermission, sendNotification } from '@tauri
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { FolderPicker } from './components/FolderPicker';
-import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig, type UploadTask } from './types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig, type BlockedFileRecord, type UploadTask } from './types';
 import './App.css';
 
 const FOUR_GB = 4 * 1024 * 1024 * 1024;
@@ -44,8 +44,9 @@ function App() {
   } = useAppStore();
 
   const [alistPath, setAlistPath] = useState('/');
-  const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings' | 'blocked'>('queue');
   const [configForm, setConfigForm] = useState<AppConfig>(DEFAULT_APP_CONFIG);
+  const [blockedFiles, setBlockedFiles] = useState<BlockedFileRecord[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMessage, setConnectionMessage] = useState('');
   const [uploadPathError, setUploadPathError] = useState('');
@@ -77,6 +78,25 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     return withPrefix.replace(/\/+$/, '') || '/';
   };
 
+  const loadBlockedFiles = async () => {
+    try {
+      const records = await invoke<BlockedFileRecord[]>('get_blocked_files');
+      setBlockedFiles(records);
+    } catch (error) {
+      console.error('Failed to load blocked files:', error);
+    }
+  };
+
+  const removeBlockedFile = async (index: number) => {
+    await invoke('remove_blocked_file', { index });
+    await loadBlockedFiles();
+  };
+
+  const clearBlockedFiles = async () => {
+    await invoke('clear_blocked_files');
+    setBlockedFiles([]);
+  };
+
   const speedLimitToMBs = (bytesPerSec: number): number =>
     bytesPerSec === 0
       ? 0
@@ -102,6 +122,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   useEffect(() => {
     loadQueue();
     loadHistory();
+    loadBlockedFiles();
     loadConfig();
     
     // 启动心跳检测
@@ -570,6 +591,12 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
           历史记录 ({history.length})
         </button>
         <button 
+          className={activeTab === 'blocked' ? 'active' : ''}
+          onClick={() => { setActiveTab('blocked'); loadBlockedFiles(); }}
+        >
+          拦截记录 ({blockedFiles.length})
+        </button>
+        <button
           className={activeTab === 'settings' ? 'active' : ''}
           onClick={() => setActiveTab('settings')}
         >
@@ -823,6 +850,49 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 </table>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'blocked' && (
+          <div className="blocked-tab">
+            <div className="tab-header">
+              <h2>被拦截文件记录</h2>
+              <button onClick={clearBlockedFiles} className="danger" disabled={blockedFiles.length === 0}>
+                清空所有记录
+              </button>
+            </div>
+            {blockedFiles.length === 0 ? (
+              <p>暂无被拦截文件记录</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>文件名</th>
+                    <th>文件路径</th>
+                    <th>文件大小</th>
+                    <th>原因</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {blockedFiles.map((record, index) => (
+                    <tr key={index}>
+                      <td>{record.file_name}</td>
+                      <td title={record.file_path}>{record.file_path}</td>
+                      <td>{formatFileSize(record.file_size)}</td>
+                      <td>{record.reason}</td>
+                      <td>{new Date(record.blocked_at).toLocaleString()}</td>
+                      <td>
+                        <button onClick={() => removeBlockedFile(index)} className="small danger">
+                          删除
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         )}
 

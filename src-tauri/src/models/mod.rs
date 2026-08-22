@@ -269,6 +269,26 @@ impl Default for NotificationConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockedFileRecord {
+    pub file_path: String,
+    pub file_name: String,
+    pub file_size: u64,
+    pub reason: String,
+    pub blocked_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BlockedFileData {
+    pub records: Vec<BlockedFileRecord>,
+}
+
+impl Default for BlockedFileData {
+    fn default() -> Self {
+        Self { records: vec![] }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryConfig {
     #[serde(default = "default_history_retention_days")]
     pub retention_days: u32,

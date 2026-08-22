@@ -66,6 +66,7 @@ impl QueueManager {
                     Ok(None) => {}
                     Err(message) => {
                         log(&format!("文件夹内文件被大文件保护拦截: file_path={}, file_name={}, size={}B, error={}", file_info.path, file_info.name, file_info.size, message));
+                        self.record_blocked_file(&file_info.path, &file_info.name, file_info.size, &message).await;
                         warnings.push(message);
                         continue;
                     }
@@ -78,9 +79,18 @@ impl QueueManager {
             let (size, name) = crate::utils::fs::get_file_info(&file_path)
                 .await
                 .map_err(|e| e.to_string())?;
-            if let Some(warning) = self.validate_large_file(&name, size).await? {
-                log(&format!("大文件风险提示: file_path={}, file_name={}, size={}B, warning={}", file_path, name, size, warning));
-                warnings.push(warning);
+            match self.validate_large_file(&name, size).await {
+                Ok(Some(warning)) => {
+                    log(&format!("大文件风险提示: file_path={}, file_name={}, size={}B, warning={}", file_path, name, size, warning));
+                    warnings.push(warning);
+                }
+                Ok(None) => {}
+                Err(message) => {
+                    log(&format!("单文件被大文件保护拦截: file_path={}, file_name={}, size={}B, error={}", file_path, name, size, message));
+                    self.record_blocked_file(&file_path, &name, size, &message).await;
+                    warnings.push(message);
+                    return Ok(AddToQueueResult { tasks: added_tasks, warnings });
+                }
             }
             
             let mut task = UploadTask::new(file_path.clone(), target_root.clone());

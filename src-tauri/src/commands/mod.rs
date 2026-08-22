@@ -257,6 +257,28 @@ pub async fn test_notification(config: NotificationConfig) -> Result<(), String>
 }
 
 #[tauri::command]
+pub async fn get_blocked_files() -> Result<Vec<BlockedFileRecord>, String> {
+    let data = crate::utils::storage::Storage::load_blocked_files().map_err(|e| e.to_string())?;
+    Ok(data.records)
+}
+
+#[tauri::command]
+pub async fn remove_blocked_file(index: usize) -> Result<(), String> {
+    let mut data = crate::utils::storage::Storage::load_blocked_files().map_err(|e| e.to_string())?;
+    if index < data.records.len() {
+        data.records.remove(index);
+        crate::utils::storage::Storage::save_blocked_files(&data).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_blocked_files() -> Result<(), String> {
+    crate::utils::storage::Storage::save_blocked_files(&crate::models::BlockedFileData::default()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<String, String> {
     log(&format!("收到 Alist 目录列表请求: base_url={}, username={}, has_token={}, path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), path));
     let client = AlistClient::new(config.alist.base_url, config.alist.token);

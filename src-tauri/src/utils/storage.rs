@@ -72,6 +72,14 @@ impl Storage {
         Self::write_json("config.json", config)
     }
 
+    pub fn load_blocked_files() -> Result<BlockedFileData, Box<dyn std::error::Error>> {
+        Self::read_json("blocked_files.json")
+    }
+
+    pub fn save_blocked_files(data: &BlockedFileData) -> Result<(), Box<dyn std::error::Error>> {
+        Self::write_json("blocked_files.json", data)
+    }
+
     pub fn get_data_path() -> PathBuf {
         Self::get_data_dir()
     }
