@@ -521,6 +521,32 @@ tr:last-child td {
   font-size: 0.875rem;
 }
 
+.form-group select {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: var(--bg-color);
+  color: var(--text-color);
+}
+
+.speed-limit-control {
+  flex: 1;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.speed-limit-control select {
+  flex: 1;
+  min-width: 0;
+}
+
+.speed-limit-control input {
+  flex: 1;
+  min-width: 0;
+}
+
 .password-input-wrapper {
   display: flex;
   gap: 0.5rem;
