@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, Fragment } from 'react';
+import { useEffect, useState, useRef, useMemo, Fragment } from 'react';
 import { useAppStore } from './store/appStore';
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -7,7 +7,7 @@ import { isPermissionGranted, requestPermission, sendNotification } from '@tauri
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { FolderPicker } from './components/FolderPicker';
-import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig } from './types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig, type UploadTask } from './types';
 import './App.css';
 
 const FOUR_GB = 4 * 1024 * 1024 * 1024;
@@ -57,6 +57,9 @@ function App() {
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
+  const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
+  const historyRetryTimerRef = useRef<Record<string, number>>({});
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
   const alistPathRef = useRef('/');
@@ -151,6 +154,7 @@ function App() {
       if (savePathTimerRef.current) {
         window.clearTimeout(savePathTimerRef.current);
       }
+      Object.values(historyRetryTimerRef.current).forEach(window.clearTimeout);
     };
   }, [loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
 
@@ -320,6 +324,38 @@ function App() {
   const handlePauseUpload = async () => {
     await pauseUpload();
   };
+  const handleHistoryRetry = async (task: UploadTask) => {
+    try {
+      await writeClientLog(`历史记录重试: file=${task.file.path}, alist_path=${task.alist_path}`);
+      const result = await addToFileQueue(task.file.path, task.alist_path);
+      if (result.warnings.length > 0) {
+        window.alert(result.warnings.join('\n'));
+      }
+      setHistoryRetryStatus(prev => ({ ...prev, [task.id]: 'queued' }));
+      const timerId = window.setTimeout(() => {
+        setHistoryRetryStatus(prev => {
+          const next = { ...prev };
+          delete next[task.id];
+          return next;
+        });
+      }, 3000);
+      historyRetryTimerRef.current[task.id] = timerId;
+      await writeClientLog(`历史记录重试成功: file=${task.file.path}, alist_path=${task.alist_path}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await writeClientLog(`历史记录重试失败: ${message}`);
+      setHistoryRetryStatus(prev => ({ ...prev, [task.id]: 'error' }));
+      window.alert(`重试失败: ${message}`);
+      const timerId = window.setTimeout(() => {
+        setHistoryRetryStatus(prev => {
+          const next = { ...prev };
+          delete next[task.id];
+          return next;
+        });
+      }, 3000);
+      historyRetryTimerRef.current[task.id] = timerId;
+    }
+  };
 
   const writeClientLog = async (message: string) => {
     try {
@@ -482,6 +518,10 @@ function App() {
     if (!isoString) return '-';
     return new Date(isoString).toLocaleString('zh-CN');
   };
+  const filteredHistory = useMemo(() => {
+    if (historyFilter === 'all') return history;
+    return history.filter(t => t.status === historyFilter);
+  }, [history, historyFilter]);
 
   const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
@@ -699,15 +739,38 @@ function App() {
         {activeTab === 'history' && (
           <div className="history-tab">
             <div className="history-toolbar">
-              <button onClick={clearHistory} disabled={history.length === 0}>
+              <div className="history-filter">
+                <button
+                  type="button"
+                  className={historyFilter === 'all' ? 'active' : ''}
+                  onClick={() => setHistoryFilter('all')}
+                >
+                  全部 ({history.length})
+                </button>
+                <button
+                  type="button"
+                  className={historyFilter === 'completed' ? 'active' : ''}
+                  onClick={() => setHistoryFilter('completed')}
+                >
+                  成功 ({history.filter(t => t.status === 'completed').length})
+                </button>
+                <button
+                  type="button"
+                  className={historyFilter === 'failed' ? 'active' : ''}
+                  onClick={() => setHistoryFilter('failed')}
+                >
+                  失败 ({history.filter(t => t.status === 'failed').length})
+                </button>
+              </div>
+              <button type="button" onClick={clearHistory} disabled={history.length === 0}>
                 清空历史
               </button>
             </div>
 
             <div className="history-list">
-              {history.length === 0 ? (
+              {filteredHistory.length === 0 ? (
                 <div className="empty-state">
-                  <p>暂无历史记录</p>
+                  <p>{history.length === 0 ? '暂无历史记录' : '当前筛选下暂无历史记录'}</p>
                 </div>
               ) : (
                 <table>
@@ -719,10 +782,11 @@ function App() {
                       <th>状态</th>
                       <th>完成时间</th>
                       <th>耗时</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {history.map(task => (
+                    {filteredHistory.map(task => (
                       <tr key={task.id}>
                         <td>{task.file.name}</td>
                         <td>{formatFileSize(task.file.size)}</td>
@@ -735,6 +799,18 @@ function App() {
                         </td>
                         <td>{formatDateTime(task.end_time)}</td>
                         <td>{task.duration ? formatDuration(task.duration) : '-'}</td>
+                        <td>
+                          {task.status === 'failed' && (
+                            <button
+                              type="button"
+                              onClick={() => handleHistoryRetry(task)}
+                              className={`small ${historyRetryStatus[task.id] === 'queued' ? 'queued' : ''}`}
+                              disabled={historyRetryStatus[task.id] === 'queued'}
+                            >
+                              {historyRetryStatus[task.id] === 'queued' ? '已加入队列' : '重试'}
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
