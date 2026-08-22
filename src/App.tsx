@@ -64,10 +64,10 @@ function App() {
     return withPrefix.replace(/\/+$/, '') || '/';
   };
 
-  const speedLimitToMbps = (bytesPerSec: number): number =>
+  const speedLimitToMBs = (bytesPerSec: number): number =>
     bytesPerSec === 0
       ? 0
-      : Math.round(bytesPerSec / 125000 * 100) / 100;
+      : Math.round(bytesPerSec / 1000000 * 100) / 100;
 
   const isRootAlistPath = (path: string) => normalizeAlistPath(path) === '/';
 
@@ -150,10 +150,10 @@ function App() {
     const normalizedConfig = normalizeAppConfig(config);
     setConfigForm(normalizedConfig);
     // 判断当前上传限速值是否在预设选项中，否则启用自定义模式
-    const mbps = speedLimitToMbps(normalizedConfig.upload.speed_limit);
+    const mb_s = speedLimitToMBs(normalizedConfig.upload.speed_limit);
     const presets = [0, 1, 2, 5, 10];
-    setSpeedLimitCustomMode(!presets.includes(mbps));
-    setSpeedLimitCustomText(mbps === 0 ? '' : String(mbps));
+    setSpeedLimitCustomMode(!presets.includes(mb_s));
+    setSpeedLimitCustomText(mb_s === 0 ? '' : String(mb_s));
 
     if (configLoaded && !configInitializedRef.current) {
       const savedPath = normalizeAlistPath(normalizedConfig.upload.last_alist_path || '/');
@@ -801,35 +801,35 @@ function App() {
                 />
               </div>
               <div className="form-group">
-                <label>上传限速 Mbps:</label>
+                <label>上传限速 MB/s:</label>
                 <div className="speed-limit-control">
                   <select
                     value={speedLimitCustomMode ? -1 : (() => {
-                      const mbps = speedLimitToMbps(configForm.upload.speed_limit);
+                      const mb_s = speedLimitToMBs(configForm.upload.speed_limit);
                       const presets = [0, 1, 2, 5, 10];
-                      return presets.includes(mbps) ? mbps : -1;
+                      return presets.includes(mb_s) ? mb_s : -1;
                     })()}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value);
                       if (val === -1) {
                         if (!speedLimitCustomMode) {
-                          const mbps = speedLimitToMbps(configForm.upload.speed_limit);
-                          setSpeedLimitCustomText(mbps === 0 ? '' : String(mbps));
+                          const mb_s = speedLimitToMBs(configForm.upload.speed_limit);
+                          setSpeedLimitCustomText(mb_s === 0 ? '' : String(mb_s));
                         }
                         setSpeedLimitCustomMode(true);
                         return;
                       }
                       setSpeedLimitCustomMode(false);
                       setSpeedLimitCustomText('');
-                      const bytesPerSec = val === 0 ? 0 : Math.round(val * 125000);
+                      const bytesPerSec = val === 0 ? 0 : Math.round(val * 1000000);
                       setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
                     }}
                   >
                     <option value={0}>不限速</option>
-                    <option value={1}>1 Mbps</option>
-                    <option value={2}>2 Mbps</option>
-                    <option value={5}>5 Mbps</option>
-                    <option value={10}>10 Mbps</option>
+                    <option value={1}>1 MB/s</option>
+                    <option value={2}>2 MB/s</option>
+                    <option value={5}>5 MB/s</option>
+                    <option value={10}>10 MB/s</option>
                     <option value={-1}>自定义</option>
                   </select>
                   {speedLimitCustomMode && (
@@ -842,7 +842,7 @@ function App() {
                       onChange={(e) => {
                         setSpeedLimitCustomText(e.target.value);
                         const v = parseFloat(e.target.value);
-                        const bytesPerSec = Number.isFinite(v) && v > 0 ? Math.round(v * 125000) : 0;
+                        const bytesPerSec = Number.isFinite(v) && v > 0 ? Math.round(v * 1000000) : 0;
                         setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
                       }}
                     />
