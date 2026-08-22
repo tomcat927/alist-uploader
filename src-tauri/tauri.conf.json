@@ -44,7 +44,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3NDI2N0ZENDJGQ0UwQTMKUldTajRQeEMvV2RDMTJoWUZFcDBiNldSU3E5dU1oVVdQbjlzRXowUzd0cUpiODRtRVYvTUN3eFUK",
       "endpoints": [
-        "https://github.com/tomcat927/alist-uploader/releases/latest/download/latest.json"
+        "https://gh-proxy.org/https://github.com/tomcat927/alist-uploader/releases/latest/download/latest.json", "https://github.com/tomcat927/alist-uploader/releases/latest/download/latest.json"
       ]
     }
   }

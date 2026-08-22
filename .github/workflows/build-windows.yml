@@ -59,3 +59,14 @@ jobs:
           releaseBody: "每次 push 自动构建的最新版本。安装后打开软件，在设置页配置 Alist 账号信息即可使用。"
           releaseDraft: false
           prerelease: false
+
+      - name: Patch latest.json
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download latest --pattern latest.json --clobber
+          $json = Get-Content -Raw latest.json
+          $json = $json -replace 'https://github\.com/tomcat927/alist-uploader/releases/download/latest/', 'https://gh-proxy.org/https://github.com/tomcat927/alist-uploader/releases/download/latest/'
+          Set-Content -Path latest.json -Value $json -NoNewline
+          gh release upload latest latest.json --clobber
