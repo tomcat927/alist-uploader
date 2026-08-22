@@ -42,17 +42,23 @@ impl ScheduleManager {
         let Some(notification) = notification else { return };
 
         let event_key = format!("{}|{}", Local::now().format("%Y-%m-%d"), event_type);
-        let mut last_event = if event_type == "start" {
-            self.last_start_event.lock().unwrap()
-        } else {
-            self.last_stop_event.lock().unwrap()
+        let should_send = {
+            let mut last_event = if event_type == "start" {
+                self.last_start_event.lock().unwrap()
+            } else {
+                self.last_stop_event.lock().unwrap()
+            };
+            if *last_event == Some(event_key) {
+                false
+            } else {
+                *last_event = Some(event_key);
+                true
+            }
         };
-        if *last_event == Some(event_key.clone()) {
-            return;
-        }
 
-        UploadScheduler::send_schedule_notification(&notification, event_type).await;
-        *last_event = Some(event_key);
+        if should_send {
+            UploadScheduler::send_schedule_notification(&notification, event_type).await;
+        }
     }
 
     pub async fn start_schedule_monitor(&self) {
