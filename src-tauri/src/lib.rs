@@ -2,6 +2,7 @@ pub mod models;
 pub mod services;
 pub mod commands;
 pub mod utils;
+use tauri::Manager;
 
 fn append_log(file_name: &str, message: &str) {
     use std::fs::{self, OpenOptions};
@@ -111,3 +112,4 @@ pub fn run() {
         panic!("error while running tauri application: {error:?}");
     }
 }
+
