@@ -57,15 +57,6 @@ jobs:
           echo "Updated tauri.conf.json:"
           Select-String -Path src-tauri/tauri.conf.json -Pattern '"version"'
 
-
-      - name: Clean stale local bundle output
-        shell: pwsh
-        run: |
-          if (Test-Path "src-tauri\target\release\bundle") {
-            Remove-Item -LiteralPath "src-tauri\target\release\bundle" -Recurse -Force
-            Write-Host "Cleaned stale bundle output"
-          }
-
       - name: Restore Windows optional native packages
         run: npm install @rollup/rollup-win32-x64-msvc @tauri-apps/cli-win32-x64-msvc --no-save --include=optional
 
@@ -116,12 +107,6 @@ jobs:
           if (Test-Path "$bundleDir\msi") {
             Get-ChildItem "$bundleDir\msi\*.msi", "$bundleDir\msi\*.msi.sig", "$bundleDir\msi\*.zip", "$bundleDir\msi\*.zip.sig" -ErrorAction SilentlyContinue | ForEach-Object { $artifacts += $_.FullName }
           }
-          # 查找 latest.json
-          $latestJsonPath = "src-tauri\target\release\latest.json"
-          if (Test-Path $latestJsonPath) {
-            $artifacts += $latestJsonPath
-            Write-Host "Found latest.json at $latestJsonPath"
-          }
 
           Write-Host "Found artifacts:"
           $artifacts | ForEach-Object { Write-Host "  $_" }
@@ -147,19 +132,11 @@ jobs:
           }
 
       - name: Patch latest.json
-      - name: Patch latest.json
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Always use the freshly generated latest.json from build output
-          $latestJson = "src-tauri\target\release\latest.json"
-          if (-not (Test-Path $latestJson)) {
-            Write-Host "ERROR: latest.json not found in build output at $latestJson"
-            exit 1
-          }
-          Write-Host "Using fresh latest.json from build output"
-          Copy-Item $latestJson "latest.json"
+          gh release download latest --pattern latest.json --clobber 2>$null
           $json = Get-Content -Raw latest.json
           $json = $json -replace 'https://github\.com/tomcat927/alist-uploader/releases/download/latest/', 'https://gh-proxy.org/https://github.com/tomcat927/alist-uploader/releases/download/latest/'
           Set-Content -Path latest.json -Value $json -NoNewline

@@ -3,6 +3,7 @@ import { useAppStore } from './store/appStore';
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { invoke } from '@tauri-apps/api/core';
+import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -58,8 +59,9 @@ function App() {
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
-  const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
-  const historyRetryTimerRef = useRef<Record<string, number>>({});
+const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
+ const [appVersion, setAppVersion] = useState('');
+const historyRetryTimerRef = useRef<Record<string, number>>({});
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
   const alistPathRef = useRef('/');
@@ -156,9 +158,13 @@ function App() {
       }
       Object.values(historyRetryTimerRef.current).forEach(window.clearTimeout);
     };
-  }, [loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
+ }, [loadQueue, loadHistory, loadConfig, startHealthCheck, stopHealthCheck, addToFileQueue]);
 
   useEffect(() => {
+    getVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
+ useEffect(() => {
     const normalizedConfig = normalizeAppConfig(config);
     setConfigForm(normalizedConfig);
     // 判断当前上传限速值是否在预设选项中，否则启用自定义模式
@@ -1299,12 +1305,15 @@ function App() {
               {saveConfigStatus === 'success' && (
                 <span className="test-result success">{saveConfigMessage}</span>
               )}
-              {saveConfigStatus === 'error' && (
-                <span className="test-result error">{saveConfigMessage}</span>
-              )}
-            </div>
-          </div>
-        )}
+             {saveConfigStatus === 'error' && (
+               <span className="test-result error">{saveConfigMessage}</span>
+             )}
+           </div>
+           <div className="settings-version">
+             当前版本：{appVersion}
+           </div>
+         </div>
+       )}
       </main>
       {downloadingUpdate && (
         <div className="update-download-overlay">
