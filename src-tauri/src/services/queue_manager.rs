@@ -21,9 +21,16 @@ pub struct QueueManager {
 
 impl QueueManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let queue = Storage::load_queue().unwrap_or_default();
+        let mut queue = Storage::load_queue().unwrap_or_default();
         let history = Storage::load_history().unwrap_or_default();
         let config = Storage::load_config().unwrap_or_default();
+
+        // 恢复因异常退出而中断的上传任务：标记为失败，显示重试按钮
+        let recovered = Self::recover_interrupted_tasks(&mut queue);
+        if recovered > 0 {
+            log(&format!("启动时发现 {} 个中断的上传任务，已标记为失败，可手动重试", recovered));
+            Storage::save_queue(&queue)?;
+        }
 
         Ok(Self {
             queue: Arc::new(RwLock::new(queue)),
@@ -251,6 +258,24 @@ impl QueueManager {
         );
         
         Ok(())
+     }
+ }
+ 
+impl QueueManager {
+    /// 将队列中所有状态为 `Uploading` 的任务标记为 `Failed`，
+    /// 原因是应用异常退出，原上传进程已丢失。
+    /// 返回被恢复的任务数量。
+    fn recover_interrupted_tasks(queue: &mut QueueData) -> usize {
+        let mut count = 0;
+        for task in &mut queue.tasks {
+            if task.status == TaskStatus::Uploading {
+                task.status = TaskStatus::Failed;
+                task.error = Some("上传中断：应用异常退出，原上传进程已丢失，请点击重试重新上传".to_string());
+                task.progress = 0;
+                count += 1;
+            }
+        }
+        count
     }
 }
 
