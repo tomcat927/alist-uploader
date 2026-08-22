@@ -48,7 +48,7 @@ impl ScheduleManager {
             } else {
                 self.last_stop_event.lock().unwrap()
             };
-            if *last_event == Some(event_key) {
+            if *last_event == Some(event_key.clone()) {
                 false
             } else {
                 *last_event = Some(event_key);
