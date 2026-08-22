@@ -109,6 +109,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   pauseUpload: async () => {
+    set({ isStopping: true });
     await invoke('stop_after_current');
     // 开始轮询检查是否已停止
     const checkStopped = async () => {
