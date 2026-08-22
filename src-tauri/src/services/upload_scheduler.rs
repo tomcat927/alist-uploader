@@ -22,6 +22,9 @@ impl UploadScheduler {
             return;
         }
 
+        // 重置停止标志，确保新上传可以正常启动
+        self.queue_manager.set_stop_after_current(false);
+
         log("上传调度器启动");
         self.queue_manager.set_uploading(true);
         let config = self.queue_manager.config.read().await;
@@ -38,6 +41,11 @@ impl UploadScheduler {
             
             if !self.can_start_new_task(&config).await {
                 drop(config);
+                // 尽管停止标志已设置，也检查是否所有任务都已完成
+                if self.get_active_task_count().await == 0 {
+                    log("停止标志已设置且无活动任务，上传调度器结束");
+                    break;
+                }
                 sleep(Duration::from_millis(1000)).await;
                 continue;
             }
@@ -478,3 +486,4 @@ impl UploadScheduler {
         self.queue_manager.set_uploading(false);
     }
 }
+
