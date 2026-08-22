@@ -308,7 +308,7 @@ impl AlistClient {
             // 表单上传
             url = format!("{}/api/fs/form", self.base_url);
             let file_part = multipart::Part::stream_with_length(
-                Self::rate_limited_stream(file, rate_limiter),
+                reqwest::Body::wrap_stream(Self::rate_limited_stream(file, rate_limiter)),
                 file_len,
             ).file_name(file_name.clone());
             let form = multipart::Form::new().part("file", file_part);
