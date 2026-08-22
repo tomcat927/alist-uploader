@@ -81,25 +81,72 @@ jobs:
           }
 
       - name: Build Tauri App for Windows
-        uses: tauri-apps/tauri-action@v0
+        shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tauriScript: npm run tauri
-          tagName: latest
-          releaseName: "最新构建"
-          releaseBody: "每次 push 自动构建的最新版本。安装后打开软件，在设置页配置 Alist 账号信息即可使用。"
-          releaseDraft: false
-          prerelease: false
+        run: |
+          npm run tauri build
+          Write-Host "Build finished"
+
+      - name: Upload to release
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $release = "latest"
+          $repo = $env:GITHUB_REPOSITORY
+
+          # 查找 release 目录下的构建产物
+          $bundleDir = "src-tauri\target\release\bundle"
+          $artifacts = @()
+          if (Test-Path "$bundleDir\nsis") {
+            Get-ChildItem "$bundleDir\nsis\*.exe", "$bundleDir\nsis\*.exe.sig", "$bundleDir\nsis\*.zip", "$bundleDir\nsis\*.zip.sig" -ErrorAction SilentlyContinue | ForEach-Object { $artifacts += $_.FullName }
+          }
+          if (Test-Path "$bundleDir\msi") {
+            Get-ChildItem "$bundleDir\msi\*.msi", "$bundleDir\msi\*.msi.sig", "$bundleDir\msi\*.zip", "$bundleDir\msi\*.zip.sig" -ErrorAction SilentlyContinue | ForEach-Object { $artifacts += $_.FullName }
+          }
+          # 查找 latest.json
+          $latestJsonPath = "src-tauri\target\release\latest.json"
+          if (Test-Path $latestJsonPath) {
+            $artifacts += $latestJsonPath
+            Write-Host "Found latest.json at $latestJsonPath"
+          }
+
+          Write-Host "Found artifacts:"
+          $artifacts | ForEach-Object { Write-Host "  $_" }
+
+          # 检查 release 是否存在，存在则上传，否则创建
+          $releaseExists = $false
+          try {
+            $null = gh release view $release --repo $repo 2>$null
+            $releaseExists = $true
+          } catch {
+            $releaseExists = $false
+          }
+
+          if (-not $releaseExists) {
+            Write-Host "Release '$release' does not exist, creating..."
+            gh release create $release --title "最新构建" --notes "每次 push 自动构建的最新版本。安装后打开软件，在设置页配置 Alist 账号信息即可使用。" --repo $repo --latest
+          }
+
+          # 上传所有产物
+          foreach ($artifact in $artifacts) {
+            Write-Host "Uploading $artifact"
+            gh release upload $release $artifact --repo $repo --clobber
+          }
 
       - name: Patch latest.json
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release download latest --pattern latest.json --clobber
+          gh release download latest --pattern latest.json --clobber 2>$null
+          if (-not (Test-Path "latest.json")) {
+            Write-Host "latest.json not found in release, copying from build output"
+            Copy-Item "src-tauri\target\release\latest.json" "latest.json"
+          }
           $json = Get-Content -Raw latest.json
           $json = $json -replace 'https://github\.com/tomcat927/alist-uploader/releases/download/latest/', 'https://gh-proxy.org/https://github.com/tomcat927/alist-uploader/releases/download/latest/'
           Set-Content -Path latest.json -Value $json -NoNewline
