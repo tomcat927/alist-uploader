@@ -1281,15 +1281,15 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
             <div className="settings-section">
               <h3>历史记录</h3>
               <div className="form-group">
-                <label>最大保留记录数:</label>
+                <label>历史记录保留天数:</label>
                 <input
                   type="number"
-                  min="10"
-                  max="1000"
-                  value={configForm.history.max_records}
+                  min="1"
+                  max="365"
+                  value={configForm.history.retention_days}
                   onChange={(e) => setConfigForm({
                     ...configForm,
-                    history: { ...configForm.history, max_records: parseInt(e.target.value) || 100 }
+                    history: { ...configForm.history, retention_days: parseInt(e.target.value) || 30 }
                   })}
                 />
               </div>

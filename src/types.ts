@@ -76,7 +76,7 @@ export interface UploadConfig {
 }
 
 export interface HistoryConfig {
-  max_records: number;
+  retention_days: number;
 }
 
 export interface AppConfig {
@@ -121,7 +121,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     },
   },
   history: {
-    max_records: 100,
+    retention_days: 30,
   },
 };
 

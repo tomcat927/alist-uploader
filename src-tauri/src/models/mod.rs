@@ -267,12 +267,17 @@ impl Default for NotificationConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryConfig {
-    pub max_records: usize,
+    #[serde(default = "default_history_retention_days")]
+    pub retention_days: u32,
+}
+
+fn default_history_retention_days() -> u32 {
+    30
 }
 
 impl Default for HistoryConfig {
     fn default() -> Self {
-        Self { max_records: 100 }
+        Self { retention_days: 30 }
     }
 }
 

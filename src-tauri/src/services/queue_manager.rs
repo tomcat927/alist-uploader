@@ -208,11 +208,14 @@ impl QueueManager {
         let mut history = self.history.write().await;
         history.records.insert(0, task);
         
+        // 按保留天数清理过期记录
         let config = self.config.read().await;
-        let max_records = config.history.max_records;
-        if history.records.len() > max_records {
-            history.records.truncate(max_records);
-        }
+        let retention_days = config.history.retention_days;
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days as i64);
+        history.records.retain(|r| {
+            let ts = r.end_time.unwrap_or(r.created_at);
+            ts > cutoff
+        });
         
         Storage::save_history(&*history)?;
         Ok(())
