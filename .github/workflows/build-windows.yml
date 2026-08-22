@@ -53,21 +53,7 @@ jobs:
         with:
           tauriScript: npm run tauri
           tagName: latest
+          releaseName: "最新构建"
           releaseBody: "每次 push 自动构建的最新版本。安装后打开软件，在设置页配置 Alist 账号信息即可使用。"
           releaseDraft: false
           prerelease: false
-  
-      - name: Upload EXE to Release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: "latest"
-          name: "最新构建"
-          body: "每次 push 自动构建的最新版本。安装后打开软件，在设置页配置 Alist 账号信息即可使用。"
-          replacesArtifacts: true
-          allowUpdates: true
-          removeArtifacts: true
-          artifact: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/latest.json
-            src-tauri/target/release/bundle/nsis/*.sig
-          token: ${{ secrets.GITHUB_TOKEN }}
