@@ -43,6 +43,20 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Auto-increment version with build number
+        shell: pwsh
+        run: |
+          $currentVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.*)"' | ForEach-Object { $$_.Matches.Groups[1].Value }
+          $parts = $currentVersion -split '\.'
+          $newVersion = "$($parts[0]).$($parts[1]).${{ github.run_number }}"
+          echo "Setting version to $newVersion"
+          (Get-Content src-tauri/Cargo.toml) -replace '^version = ".*"', "version = `"$newVersion`"" | Set-Content src-tauri/Cargo.toml
+          (Get-Content src-tauri/tauri.conf.json) -replace '"version": ".*"', "`"version`": `"$newVersion`"" | Set-Content src-tauri/tauri.conf.json
+          echo "Updated Cargo.toml:"
+          Select-String -Path src-tauri/Cargo.toml -Pattern "^version"
+          echo "Updated tauri.conf.json:"
+          Select-String -Path src-tauri/tauri.conf.json -Pattern '"version"'
+
       - name: Restore Windows optional native packages
         run: npm install @rollup/rollup-win32-x64-msvc @tauri-apps/cli-win32-x64-msvc --no-save --include=optional
 
