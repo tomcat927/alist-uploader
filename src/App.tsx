@@ -54,6 +54,8 @@ function App() {
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSizeText, setDownloadSizeText] = useState('');
+  const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
   const alistPathRef = useRef('/');
@@ -346,7 +348,23 @@ function App() {
   };
 
   const handleSaveConfig = async () => {
-    await saveConfig(normalizeAppConfig(configForm));
+    setSaveConfigStatus('saving');
+    setSaveConfigMessage('');
+    try {
+      await saveConfig(normalizeAppConfig(configForm));
+      setSaveConfigStatus('success');
+      setSaveConfigMessage('配置已保存');
+      await writeClientLog('配置保存成功');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setSaveConfigStatus('error');
+      setSaveConfigMessage(message);
+      await writeClientLog(`配置保存失败: ${message}`);
+    }
+    setTimeout(() => {
+      setSaveConfigStatus('idle');
+      setSaveConfigMessage('');
+    }, 3000);
   };
 
   const handleTestNotification = async () => {
@@ -1122,9 +1140,15 @@ function App() {
               <button onClick={handleCheckUpdate} className="secondary">
                 检查更新
               </button>
-              <button onClick={handleSaveConfig} className="primary">
-                保存配置
+              <button onClick={handleSaveConfig} className="primary" disabled={saveConfigStatus === 'saving'}>
+                {saveConfigStatus === 'saving' ? '保存中...' : '保存配置'}
               </button>
+              {saveConfigStatus === 'success' && (
+                <span className="test-result success">{saveConfigMessage}</span>
+              )}
+              {saveConfigStatus === 'error' && (
+                <span className="test-result error">{saveConfigMessage}</span>
+              )}
             </div>
           </div>
         )}
