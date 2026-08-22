@@ -1172,6 +1172,8 @@ function App() {
                         enabled: e.target.checked,
                         start_time: configForm.upload.schedule?.start_time || "03:00",
                         end_time: configForm.upload.schedule?.end_time || "07:00",
+                        notify_on_start: configForm.upload.schedule?.notify_on_start || false,
+                        notify_on_stop: configForm.upload.schedule?.notify_on_stop || false,
                       }
                     }
                   })}
@@ -1194,6 +1196,8 @@ function App() {
                             enabled: configForm.upload.schedule?.enabled || false,
                             start_time: e.target.value,
                             end_time: configForm.upload.schedule?.end_time || "07:00",
+                            notify_on_start: configForm.upload.schedule?.notify_on_start || false,
+                            notify_on_stop: configForm.upload.schedule?.notify_on_stop || false,
                           }
                         }
                       })}
@@ -1212,10 +1216,54 @@ function App() {
                             enabled: configForm.upload.schedule?.enabled || false,
                             start_time: configForm.upload.schedule?.start_time || "03:00",
                             end_time: e.target.value,
+                            notify_on_start: configForm.upload.schedule?.notify_on_start || false,
+                            notify_on_stop: configForm.upload.schedule?.notify_on_stop || false,
                           }
                         }
                       })}
                     />
+                  </div>
+                  <div className="form-group checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="notifyOnStart"
+                      checked={configForm.upload.schedule?.notify_on_start || false}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { 
+                          ...configForm.upload, 
+                          schedule: {
+                            enabled: configForm.upload.schedule?.enabled || false,
+                            start_time: configForm.upload.schedule?.start_time || "03:00",
+                            end_time: configForm.upload.schedule?.end_time || "07:00",
+                            notify_on_start: e.target.checked,
+                            notify_on_stop: configForm.upload.schedule?.notify_on_stop || false,
+                          }
+                        }
+                      })}
+                    />
+                    <label htmlFor="notifyOnStart">开始时发送飞书通知</label>
+                  </div>
+                  <div className="form-group checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="notifyOnStop"
+                      checked={configForm.upload.schedule?.notify_on_stop || false}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        upload: { 
+                          ...configForm.upload, 
+                          schedule: {
+                            enabled: configForm.upload.schedule?.enabled || false,
+                            start_time: configForm.upload.schedule?.start_time || "03:00",
+                            end_time: configForm.upload.schedule?.end_time || "07:00",
+                            notify_on_start: configForm.upload.schedule?.notify_on_start || false,
+                            notify_on_stop: e.target.checked,
+                          }
+                        }
+                      })}
+                    />
+                    <label htmlFor="notifyOnStop">结束时发送飞书通知</label>
                   </div>
                   <div className="schedule-notice">
                     ℹ️ 到开始时间自动上传，到结束时间等待当前任务完成后停止

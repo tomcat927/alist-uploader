@@ -412,6 +412,57 @@ impl UploadScheduler {
         log::info!("测试通知发送成功");
         Ok(())
     }
+    pub async fn send_schedule_notification(
+        notification: &NotificationConfig,
+        event_type: &str,
+    ) {
+        let (title, message, template) = match event_type {
+            "start" => (
+                "定时上传开始",
+                "## 定时上传开始\n\n**状态**: 已到达定时上传的开始时间，调度器已启动\n\n_系统将自动扫描队列中的待上传文件并开始上传_",
+                "blue",
+            ),
+            "stop" => (
+                "定时上传结束",
+                "## 定时上传结束\n\n**状态**: 已到达定时上传的结束时间，不再启动新上传任务\n\n_如果当前正在上传，当前任务会继续完成_",
+                "yellow",
+            ),
+            _ => return,
+        };
+        let payload = serde_json::json!({
+            "msg_type": "interactive",
+            "card": {
+                "header": {
+                    "title": {
+                        "tag": "plain_text",
+                        "content": title,
+                    },
+                    "template": template,
+                },
+                "elements": [{
+                    "tag": "div",
+                    "text": {
+                        "tag": "lark_md",
+                        "content": message,
+                    }
+                }]
+            }
+        });
+        for channel in &notification.channels {
+            match channel.as_str() {
+                "feishu" => {
+                    if let Err(e) = Self::post_feishu_card(&notification.webhook_url, &payload).await {
+                        log::error!("发送定时上传通知失败: {}, event_type={}", e, event_type);
+                    } else {
+                        log::info!("定时上传通知发送成功: event_type={}", event_type);
+                    }
+                }
+                _ => {
+                    log::warn!("不支持的通知渠道: {}", channel);
+                }
+            }
+        }
+    }
 
     async fn post_feishu_card(webhook_url: &str, payload: &serde_json::Value) -> Result<(), reqwest::Error> {
         reqwest::Client::new()

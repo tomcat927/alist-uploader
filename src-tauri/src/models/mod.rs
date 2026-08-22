@@ -174,6 +174,10 @@ pub struct ScheduledUpload {
     pub enabled: bool,
     pub start_time: String, // "HH:MM" format
     pub end_time: String,   // "HH:MM" format
+    #[serde(default)]
+    pub notify_on_start: bool,
+    #[serde(default)]
+    pub notify_on_stop: bool,
 }
 
 impl Default for ScheduledUpload {
@@ -182,6 +186,8 @@ impl Default for ScheduledUpload {
             enabled: false,
             start_time: "03:00".to_string(),
             end_time: "07:00".to_string(),
+            notify_on_start: false,
+            notify_on_stop: false,
         }
     }
 }

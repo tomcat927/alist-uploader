@@ -1,17 +1,58 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use chrono::{Local, Timelike};
 use tokio::time::sleep;
+use crate::models::ScheduledUpload;
 use crate::services::queue_manager::QueueManager;
 use crate::services::upload_scheduler::UploadScheduler;
 
 pub struct ScheduleManager {
     queue_manager: Arc<QueueManager>,
+    last_start_event: Mutex<Option<String>>,
+    last_stop_event: Mutex<Option<String>>,
 }
 
 impl ScheduleManager {
     pub fn new(queue_manager: Arc<QueueManager>) -> Self {
-        Self { queue_manager }
+        Self {
+            queue_manager,
+            last_start_event: Mutex::new(None),
+            last_stop_event: Mutex::new(None),
+        }
+    }
+
+    async fn send_schedule_notification_if_enabled(
+        &self,
+        schedule: &ScheduledUpload,
+        event_type: &str,
+    ) {
+        let enabled = match event_type {
+            "start" => schedule.notify_on_start,
+            "stop" => schedule.notify_on_stop,
+            _ => return,
+        };
+        if !enabled {
+            return;
+        }
+
+        let config = self.queue_manager.config.read().await;
+        let notification = config.upload.notification.clone().filter(|n| n.enabled && !n.webhook_url.is_empty());
+        drop(config);
+
+        let Some(notification) = notification else { return };
+
+        let event_key = format!("{}|{}", Local::now().format("%Y-%m-%d"), event_type);
+        let mut last_event = if event_type == "start" {
+            self.last_start_event.lock().unwrap()
+        } else {
+            self.last_stop_event.lock().unwrap()
+        };
+        if *last_event == Some(event_key.clone()) {
+            return;
+        }
+
+        UploadScheduler::send_schedule_notification(&notification, event_type).await;
+        *last_event = Some(event_key);
     }
 
     pub async fn start_schedule_monitor(&self) {
@@ -50,6 +91,8 @@ impl ScheduleManager {
                         tokio::spawn(async move {
                             scheduler.start_scheduler().await;
                         });
+
+                        self.send_schedule_notification_if_enabled(&schedule, "start").await;
                     }
                 }
             }
@@ -59,6 +102,7 @@ impl ScheduleManager {
                 log::info!("定时上传结束时间到：{}", schedule.end_time);
                 // 设置停止标志（等待当前任务完成）
                 self.queue_manager.set_stop_after_current(true);
+                self.send_schedule_notification_if_enabled(&schedule, "stop").await;
             }
         }
     }

@@ -47,6 +47,8 @@ export interface ScheduledUpload {
   enabled: boolean;
   start_time: string;
   end_time: string;
+  notify_on_start: boolean;
+  notify_on_stop: boolean;
 }
 
 export interface NotificationConfig {
@@ -109,6 +111,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       enabled: false,
       start_time: '03:00',
       end_time: '07:00',
+      notify_on_start: false,
+      notify_on_stop: false,
     },
     notification: {
       enabled: false,
