@@ -4,6 +4,7 @@ use tokio::time::sleep;
 use crate::models::*;
 use crate::services::alist_client::AlistClient;
 use crate::services::queue_manager::{is_root_alist_path, QueueManager, FOUR_GB, FIVE_GB};
+use crate::services::rate_limiter::RateLimiter;
 use crate::utils::log::log;
 
 pub struct UploadScheduler {
@@ -23,6 +24,9 @@ impl UploadScheduler {
 
         log("上传调度器启动");
         self.queue_manager.set_uploading(true);
+        let config = self.queue_manager.config.read().await;
+        let rate_limiter = Arc::new(RateLimiter::new(config.upload.speed_limit));
+        drop(config);
 
         loop {
             if !self.queue_manager.is_uploading() {
@@ -44,8 +48,9 @@ impl UploadScheduler {
                 let queue_manager = Arc::clone(&self.queue_manager);
                 self.queue_manager.processing_tasks.insert(task.id.clone(), task.clone());
                 
+                let rate_limiter_clone = Arc::clone(&rate_limiter);
                 tokio::spawn(async move {
-                    Self::execute_upload(queue_manager, task_clone).await;
+                    Self::execute_upload(queue_manager, task_clone, rate_limiter_clone).await;
                 });
 
                 if config.upload.concurrency == 1 {
@@ -81,7 +86,11 @@ impl UploadScheduler {
         self.queue_manager.processing_tasks.len()
     }
 
-    async fn execute_upload(queue_manager: Arc<QueueManager>, mut task: UploadTask) {
+    async fn execute_upload(
+        queue_manager: Arc<QueueManager>,
+        mut task: UploadTask,
+        rate_limiter: Arc<RateLimiter>,
+    ) {
         log(&format!("开始上传: file={}, size={}B, alist_path={}, retry={}", task.file.name, task.file.size, task.alist_path, task.retry_count));
         if is_root_alist_path(&task.alist_path) {
             let error = "上传目标目录不能为根目录 /，请选择 Alist 中的具体目录".to_string();
@@ -118,7 +127,13 @@ impl UploadScheduler {
         );
 
         log(&format!("调用 Alist API 上传: file_path={}, alist_path={}, as_task={}", task.file.path, task.alist_path, upload_config.as_task));
-        let result = Self::upload_with_retry(&queue_manager, &mut task, &alist_client, &upload_config).await;
+        let result = Self::upload_with_retry(
+            &queue_manager,
+            &mut task,
+            &alist_client,
+            &upload_config,
+            rate_limiter,
+        ).await;
 
         queue_manager.processing_tasks.remove(&task.id);
 
@@ -173,8 +188,15 @@ impl UploadScheduler {
         task: &mut UploadTask,
         alist_client: &AlistClient,
         config: &UploadConfig,
+        rate_limiter: Arc<RateLimiter>,
     ) -> Result<(), String> {
-        match alist_client.upload_file(&task.file.path, &task.alist_path, config.as_task, &config.upload_method).await {
+        match alist_client.upload_file(
+            &task.file.path,
+            &task.alist_path,
+            config.as_task,
+            &config.upload_method,
+            Some(rate_limiter),
+        ).await {
             Ok(Some(alist_task_id)) => {
                 log(&format!("等待 Alist 后台上传任务完成: file={}, alist_task_id={}", task.file.name, alist_task_id));
                 Self::wait_for_alist_task(queue_manager, task, alist_client, &alist_task_id).await

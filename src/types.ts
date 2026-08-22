@@ -58,6 +58,7 @@ export interface NotificationConfig {
 export interface UploadConfig {
   concurrency: number;
   max_retries: number;
+  speed_limit: number;
   as_task: boolean;
   upload_method: string;
   last_alist_path: string;
@@ -93,6 +94,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   upload: {
     concurrency: 1,
     max_retries: 5,
+    speed_limit: 0,
     as_task: true,
     upload_method: 'stream',
     last_alist_path: '/',

@@ -788,6 +788,24 @@ function App() {
                   })}
                 />
               </div>
+              <div className="form-group">
+                <label>上传限速 Mbps:</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1000"
+                  step="0.1"
+                  value={configForm.upload.speed_limit === 0 ? 0 : Math.round(configForm.upload.speed_limit / 125000 * 100) / 100}
+                  onChange={(e) => {
+                    const mbps = parseFloat(e.target.value);
+                    const bytesPerSec = Number.isFinite(mbps) && mbps > 0 ? Math.round(mbps * 125000) : 0;
+                    setConfigForm({
+                      ...configForm,
+                      upload: { ...configForm.upload, speed_limit: bytesPerSec }
+                    });
+                  }}
+                />
+              </div>
               <div className="form-group checkbox-group">
                 <input
                   type="checkbox"

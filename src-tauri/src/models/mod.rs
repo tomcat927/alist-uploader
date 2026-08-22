@@ -190,6 +190,9 @@ impl Default for ScheduledUpload {
 pub struct UploadConfig {
     pub concurrency: u8,
     pub max_retries: u32,
+    /// 上传限速（字节/秒），0 表示不限速
+    #[serde(default)]
+    pub speed_limit: u64,
     pub as_task: bool,
     #[serde(default = "default_upload_method")]
     pub upload_method: String,
@@ -224,6 +227,7 @@ impl Default for UploadConfig {
         Self {
             concurrency: 1,
             max_retries: 5,
+            speed_limit: 0,
             as_task: true,
             upload_method: "stream".to_string(),
             last_alist_path: "/".to_string(),

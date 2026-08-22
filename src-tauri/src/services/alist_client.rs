@@ -1,6 +1,12 @@
+use futures_util::stream::Stream;
+use futures_util::StreamExt;
 use reqwest::{Client, multipart, header::{HeaderMap, HeaderValue, AUTHORIZATION}};
+use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
+use tokio_util::bytes::Bytes;
+use crate::services::rate_limiter::RateLimiter;
 use crate::utils::log::log;
 
 #[derive(Error, Debug)]
@@ -273,6 +279,7 @@ impl AlistClient {
         alist_path: &str,
         as_task: bool,
         upload_method: &str,
+        rate_limiter: Option<Arc<RateLimiter>>,
     ) -> Result<Option<String>, AlistError> {
         if is_root_alist_path(alist_path) {
             log(&format!("Alist 上传请求被拦截: file_path={}, alist_path=/, reason=根目录不是具体上传目录", file_path));
@@ -285,7 +292,8 @@ impl AlistClient {
         
         let file = tokio::fs::File::open(file_path).await?;
         let file_len = file.metadata().await?.len();
-        log(&format!("文件已打开: file_name={}, size={}B, target_path={}, as_task={}, method={}", file_name, file_len, target_path, as_task, upload_method));
+        let speed_limit_label = rate_limiter.as_ref().map_or("unlimited".to_string(), |_| "limited".to_string());
+        log(&format!("文件已打开: file_name={}, size={}B, target_path={}, as_task={}, method={}, speed_limit={}", file_name, file_len, target_path, as_task, upload_method, speed_limit_label));
 
         let mut headers = self.headers();
         headers.insert("File-Path", target_path.parse().unwrap());
@@ -300,7 +308,7 @@ impl AlistClient {
             // 表单上传
             url = format!("{}/api/fs/form", self.base_url);
             let file_part = multipart::Part::stream_with_length(
-                reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file)),
+                Self::rate_limited_stream(file, rate_limiter),
                 file_len,
             ).file_name(file_name.clone());
             let form = multipart::Form::new().part("file", file_part);
@@ -316,7 +324,7 @@ impl AlistClient {
             // 默认流式上传
             url = format!("{}/api/fs/put", self.base_url);
             headers.insert("Content-Length", file_len.to_string().parse().unwrap());
-            let body = reqwest::Body::wrap_stream(tokio_util::io::ReaderStream::new(file));
+            let body = reqwest::Body::wrap_stream(Self::rate_limited_stream(file, rate_limiter));
 
             log(&format!("发送流式上传请求: url={}, file_name={}, size={}B", url, file_name, file_len));
             response = self.client
@@ -359,6 +367,28 @@ impl AlistClient {
             log(&format!("上传失败: file_name={}, code={}, message={}", file_name, resp.code, resp.message));
             Err(AlistError::Api(resp.message))
         }
+    }
+
+    fn rate_limited_stream(
+        file: tokio::fs::File,
+        rate_limiter: Option<Arc<RateLimiter>>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, std::io::Error>> + Send>> {
+        let stream = tokio_util::io::ReaderStream::new(file);
+        let Some(rate_limiter) = rate_limiter else {
+            return Box::pin(stream);
+        };
+
+        let limited = stream.then(move |chunk| {
+            let rate_limiter = Arc::clone(&rate_limiter);
+            async move {
+                if let Ok(ref bytes) = chunk {
+                    rate_limiter.wait_for_bytes(bytes.len() as u64).await;
+                }
+                chunk
+            }
+        });
+
+        Box::pin(limited)
     }
 
     pub async fn get_upload_tasks(&self) -> Result<Vec<AlistTaskResp>, AlistError> {
