@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAppStore } from './store/appStore';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, ask } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { invoke } from '@tauri-apps/api/core';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
@@ -51,11 +51,16 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [speedLimitCustomMode, setSpeedLimitCustomMode] = useState(false);
   const [speedLimitCustomText, setSpeedLimitCustomText] = useState('');
+  const [downloadingUpdate, setDownloadingUpdate] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadSizeText, setDownloadSizeText] = useState('');
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
   const alistPathRef = useRef('/');
   const savePathTimerRef = useRef<number | null>(null);
   const notifiedTaskIds = useRef<Set<string>>(new Set());
+  const downloadTotalBytesRef = useRef(0);
+  const downloadReceivedBytesRef = useRef(0);
 
   const normalizeAlistPath = (path: string) => {
     const trimmed = path.trim();
@@ -371,20 +376,50 @@ function App() {
     try {
       const update = await check();
       if (update) {
-        if (window.confirm(`发现新版本 ${update.version}，是否下载安装？`)) {
-          await update.downloadAndInstall((event) => {
-            if (event.event === 'Finished') {
-              writeClientLog('更新下载完成');
-            }
-          });
-          await writeClientLog('更新已安装，即将重启');
-          await relaunch();
+        const confirmed = await ask(`发现新版本 ${update.version}，是否下载安装？`, {
+          title: '发现新版本',
+          kind: 'info',
+        });
+        if (!confirmed) {
+          return;
         }
+
+        setDownloadingUpdate(true);
+        setDownloadProgress(0);
+        setDownloadSizeText('');
+        downloadTotalBytesRef.current = 0;
+        downloadReceivedBytesRef.current = 0;
+
+        await update.downloadAndInstall((event) => {
+          if (event.event === 'Started') {
+            downloadTotalBytesRef.current = event.data.contentLength || 0;
+            setDownloadProgress(0);
+            setDownloadSizeText(downloadTotalBytesRef.current > 0
+              ? `总大小 ${formatFileSize(downloadTotalBytesRef.current)}`
+              : '正在准备下载...');
+          } else if (event.event === 'Progress') {
+            downloadReceivedBytesRef.current += event.data.chunkLength;
+            const received = downloadReceivedBytesRef.current;
+            const total = downloadTotalBytesRef.current;
+            const percent = total > 0 ? Math.min(99, Math.round((received / total) * 100)) : 0;
+            setDownloadProgress(percent);
+            setDownloadSizeText(`已下载 ${formatFileSize(received)}${total > 0 ? ` / 共 ${formatFileSize(total)}` : ''}`);
+          } else if (event.event === 'Finished') {
+            setDownloadProgress(100);
+            setDownloadSizeText('下载完成，正在安装...');
+            writeClientLog('更新下载完成');
+          }
+        });
+
+        setDownloadingUpdate(false);
+        await writeClientLog('更新已安装，即将重启');
+        await relaunch();
       } else {
         window.alert('已是最新版本');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      setDownloadingUpdate(false);
       await writeClientLog(`检查更新失败: ${message}`);
       window.alert(`检查更新失败: ${message}`);
     }
@@ -1094,6 +1129,20 @@ function App() {
           </div>
         )}
       </main>
+      {downloadingUpdate && (
+        <div className="update-download-overlay">
+          <div className="update-download-dialog">
+            <h3>正在下载更新</h3>
+            <div className="update-progress-track">
+              <div className="update-progress-fill" style={{ width: `${downloadProgress}%` }} />
+            </div>
+            <div className="update-progress-info">
+              <span>{downloadProgress}%</span>
+              {downloadSizeText && <span>{downloadSizeText}</span>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
