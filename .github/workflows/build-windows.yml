@@ -153,16 +153,41 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Always use the freshly generated latest.json from build output
-          $latestJson = "src-tauri\target\release\latest.json"
-          if (-not (Test-Path $latestJson)) {
-            Write-Host "ERROR: latest.json not found in build output at $latestJson"
+          $version = $env:APP_VERSION
+          $repo = $env:GITHUB_REPOSITORY
+          # exe name pattern: alist-uploader_{version}_x64-setup.exe
+          $exeName = "alist-uploader_${version}_x64-setup.exe"
+          $sigName = "${exeName}.sig"
+          $pubDate = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+          $notes = "每次 push 自动构建的最新版本。"
+
+          # Download the .sig file from the release to get the signature
+          $sigLocal = "alist-uploader.sig"
+          gh release download latest --pattern $sigName --repo $repo --clobber 2>$null
+          if (-not (Test-Path $sigName)) {
+            Write-Host "ERROR: signature file $sigName not found in release"
             exit 1
           }
-          Write-Host "Using fresh latest.json from build output"
-          Copy-Item $latestJson "latest.json"
-          $json = Get-Content -Raw latest.json
-          $json = $json -replace 'https://gh-proxy\.org/', ''
-          $json = $json -replace 'https://github\.com/tomcat927/alist-uploader/releases/download/latest/', 'https://gh-proxy.org/https://github.com/tomcat927/alist-uploader/releases/download/latest/'
+          $signature = (Get-Content $sigName -Raw).Trim()
+
+          # Build the update manifest JSON
+          $baseUrl = "https://github.com/$repo/releases/download/latest"
+          $proxyUrl = "https://gh-proxy.org/$baseUrl"
+          $json = @{
+            version = $version
+            notes = $notes
+            pub_date = $pubDate
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = "$proxyUrl/$exeName"
+              }
+              "windows-x86_64-nsis" = @{
+                signature = $signature
+                url = "$proxyUrl/$exeName"
+              }
+            }
+          } | ConvertTo-Json -Compress
           Set-Content -Path latest.json -Value $json -NoNewline
-          gh release upload latest latest.json --clobber
+          Write-Host "Uploading latest.json (version $version)"
+          gh release upload latest latest.json --repo $repo --clobber
