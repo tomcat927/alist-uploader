@@ -212,6 +212,8 @@ pub struct UploadConfig {
     pub show_progress: bool,
     #[serde(default)]
     pub notify_on_complete: bool,
+    #[serde(default)]
+    pub minimize_on_close: bool,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
 }
@@ -242,6 +244,7 @@ impl Default for UploadConfig {
             file_exists_strategy: FileExistsStrategy::default(),
             show_progress: false,
             notify_on_complete: false,
+            minimize_on_close: true,
             schedule: Some(ScheduledUpload::default()),
             notification: None,
         }

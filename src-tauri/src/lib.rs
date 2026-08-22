@@ -71,6 +71,17 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if let Some(qm) = window.try_state::<crate::services::queue_manager::QueueManager>() {
+                    let config = qm.config.blocking_read();
+                    if config.upload.minimize_on_close {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             crate::commands::get_queue,
             crate::commands::add_to_queue,

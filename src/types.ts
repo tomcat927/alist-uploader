@@ -71,6 +71,7 @@ export interface UploadConfig {
   };
   show_progress: boolean;
   notify_on_complete: boolean;
+  minimize_on_close: boolean;
   schedule?: ScheduledUpload;
   notification?: NotificationConfig;
 }
@@ -107,6 +108,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     },
     show_progress: false,
     notify_on_complete: false,
+    minimize_on_close: true,
     schedule: {
       enabled: false,
       start_time: '03:00',

@@ -1054,6 +1054,19 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
               <div className="form-group checkbox-group">
                 <input
                   type="checkbox"
+                  id="minimizeOnClose"
+                  checked={configForm.upload.minimize_on_close}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, minimize_on_close: e.target.checked }
+                  })}
+                />
+                <label htmlFor="minimizeOnClose">关闭窗口时最小化到托盘，不退出程序</label>
+              </div>
+
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
                   id="blockFilesOver5gb"
                   checked={configForm.upload.block_files_over_5gb}
                   onChange={(e) => setConfigForm({
