@@ -3,6 +3,9 @@ pub mod services;
 pub mod commands;
 pub mod utils;
 use tauri::Manager;
+use tauri::image::Image;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
 
 fn append_log(file_name: &str, message: &str) {
     use std::fs::{self, OpenOptions};
@@ -53,7 +56,7 @@ pub fn run() {
 
     let result = tauri::Builder::default()
         .manage(queue_manager)
-        .setup(move |_app| {
+        .setup(move |app| {
             append_log("startup.log", "tauri setup begin");
             crate::utils::log::log("tauri setup begin; schedule manager starting");
             let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(qm_for_setup.clone_inner());
@@ -62,6 +65,46 @@ pub fn run() {
                 schedule_manager.start_schedule_monitor().await;
                 append_log("startup.log", "schedule monitor stopped");
             });
+
+            // 创建系统托盘图标，用于窗口最小化到托盘后恢复
+            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))
+                .expect("加载托盘图标失败");
+            let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            TrayIconBuilder::with_id("main-tray")
+                .icon(icon)
+                .tooltip("alist-uploader")
+                .menu(&menu)
+                .on_menu_event(|app_handle, event| {
+                    match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app_handle.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app_handle.exit(0);
+                        }
+                        _ => {}
+                    }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::mouse::MouseButton::Left,
+                        button_state: tauri::mouse::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
             append_log("startup.log", "tauri setup complete");
             crate::utils::log::log("tauri setup complete; QueueManager should be managed");
             Ok(())
