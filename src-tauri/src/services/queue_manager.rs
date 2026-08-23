@@ -59,6 +59,19 @@ impl QueueManager {
                 .map_err(|e| format!("收集文件夹文件失败: {}", e))?;
             log(&format!("检测到文件夹，递归收集完成: dir_path={}, file_count={}, target_root={}", file_path, files.len(), target_root));
             
+            // 拖入文件夹时，远程也要保留文件夹名这一层，例如 /115Crypt/课本/...
+            let folder_name = Path::new(&file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+            let folder_target = folder_target_root(&target_root, &folder_name);
+            log(&format!("文件夹名称已加入目标路径: folder_name={}, target_root={}, folder_target={}",
+                Path::new(&file_path).file_name().and_then(|n| n.to_str()).unwrap_or(""),
+                target_root,
+                folder_target,
+            ));
+            
             for file_info in files {
                 match self.validate_large_file(&file_info.name, file_info.size).await {
                     Ok(Some(warning)) => {
@@ -74,7 +87,7 @@ impl QueueManager {
                     }
                 }
 
-                let task = self.add_single_file_to_queue(&file_info, &target_root).await?;
+                let task = self.add_single_file_to_queue(&file_info, &folder_target).await?;
                 added_tasks.push(task);
             }
         } else {
@@ -361,5 +374,78 @@ fn build_target_dir(root: &str, relative_path: &str) -> String {
         format!("/{}", relative_parent.replace('\\', "/"))
     } else {
         format!("{}/{}", root, relative_parent.replace('\\', "/"))
+    }
+}
+
+fn folder_target_root(target_root: &str, folder_name: &str) -> String {
+    if folder_name.is_empty() {
+        return target_root.to_string();
+    }
+
+    let root = normalize_alist_path(target_root);
+    if root == "/" {
+        format!("/{}", folder_name)
+    } else {
+        format!("{}/{}", root, folder_name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_target_dir_with_parent() {
+        let result = build_target_dir("/115Crypt", "12\\102号\\IMG\\_8689.MOV");
+        assert_eq!(result, "/115Crypt/12/102号/IMG");
+    }
+
+    #[test]
+    fn test_build_target_dir_root() {
+        let result = build_target_dir("/", "folder\\sub\\file.txt");
+        assert_eq!(result, "/folder/sub");
+    }
+
+    #[test]
+    fn test_build_target_dir_no_parent() {
+        let result = build_target_dir("/115Crypt", "file.txt");
+        assert_eq!(result, "/115Crypt");
+    }
+
+    #[test]
+    fn test_build_target_dir_normalize_root() {
+        let result = build_target_dir("/115Crypt/", "sub\\file.txt");
+        assert_eq!(result, "/115Crypt/sub");
+    }
+
+    #[test]
+    fn test_folder_target_keeps_folder_name() {
+        let folder_target = folder_target_root("/115Crypt", "课本");
+        assert_eq!(folder_target, "/115Crypt/课本");
+    }
+
+    #[test]
+    fn test_folder_target_root() {
+        let folder_target = folder_target_root("/", "课本");
+        assert_eq!(folder_target, "/课本");
+    }
+
+    #[test]
+    fn test_folder_target_empty_folder_name() {
+        let folder_target = folder_target_root("/115Crypt", "");
+        assert_eq!(folder_target, "/115Crypt");
+    }
+
+    #[test]
+    fn test_folder_target_normalizes_root() {
+        let folder_target = folder_target_root("/115Crypt/", "课本");
+        assert_eq!(folder_target, "/115Crypt/课本");
+    }
+
+    #[test]
+    fn test_build_target_dir_with_folder_root() {
+        let folder_target = "/115Crypt/课本";
+        let result = build_target_dir(&folder_target, "12\\102号\\IMG\\_8689.MOV");
+        assert_eq!(result, "/115Crypt/课本/12/102号/IMG");
     }
 }
