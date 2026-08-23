@@ -67,8 +67,11 @@ pub fn run() {
             });
 
             // 创建系统托盘图标，用于窗口最小化到托盘后恢复
-            let icon = Image::from_bytes(include_bytes!("../icons/icon.png"))
-                .expect("加载托盘图标失败");
+            let img = image::load_from_memory(include_bytes!("../icons/icon.png"))
+                .expect("加载托盘图标失败")
+                .to_rgba8();
+            let (width, height) = img.dimensions();
+            let icon = Image::new_owned(img.into_raw(), width, height);
             let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &quit])?;
@@ -92,8 +95,8 @@ pub fn run() {
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click {
-                        button: tauri::mouse::MouseButton::Left,
-                        button_state: tauri::mouse::MouseButtonState::Up,
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
                         ..
                     } = event
                     {
