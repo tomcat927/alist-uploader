@@ -239,10 +239,10 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
         await loadQueue();
         await loadHistory();
         const latestQueue = useAppStore.getState().queue;
-        const hasActiveTask = latestQueue.some(task => task.status === 'pending' || task.status === 'uploading');
-        if (!hasActiveTask) {
+        const backendUploading = await invoke<boolean>('get_is_uploading');
+        if (!backendUploading) {
           setIsUploading(false);
-          await writeClientLog('上传队列已完成，前端停止上传状态');
+          await writeClientLog('上传调度器已停止，前端关闭上传中状态');
         }
 
         // 检测新完成的任务，发送系统通知

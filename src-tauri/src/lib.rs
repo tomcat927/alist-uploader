@@ -140,6 +140,7 @@ pub fn run() {
             crate::commands::save_config,
             crate::commands::start_upload,
             crate::commands::pause_upload,
+            crate::commands::get_is_uploading,
             crate::commands::stop_after_current,
             crate::commands::retry_upload,
             crate::commands::test_alist_connection,

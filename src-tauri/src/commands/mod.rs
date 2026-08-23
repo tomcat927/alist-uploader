@@ -93,6 +93,11 @@ pub async fn start_upload(queue_manager: State<'_, QueueManager>) -> Result<(), 
 }
 
 #[tauri::command]
+pub fn get_is_uploading(queue_manager: State<'_, QueueManager>) -> bool {
+    queue_manager.is_uploading()
+}
+
+#[tauri::command]
 pub async fn pause_upload(queue_manager: State<'_, QueueManager>) -> Result<(), String> {
     queue_manager.set_stop_after_current(true);
     Ok(())
