@@ -262,10 +262,26 @@ impl UploadScheduler {
 
             let progress_f = alist_task.progress.clamp(0.0, 100.0);
             let progress = progress_f as u8;
-            let old_speed = task.speed;
-            task.speed = alist_task.speed;
+            let now = chrono::Utc::now();
 
-            if task.progress != progress || task.speed != old_speed {
+            // 速度计算：仅当进度推进时，用 (Δprogress × size / 100) / Δt 估算字节/秒
+            // 进度未变则保留上次速度（与 OpenList 前端一致）；首次记录基线，不产出速度
+            if task.prev_ts.is_none() {
+                task.prev_progress = progress_f;
+                task.prev_ts = Some(now);
+            } else if (progress_f - task.prev_progress).abs() > f64::EPSILON {
+                let prev_ts = task.prev_ts.unwrap();
+                let dt = (now - prev_ts).num_milliseconds();
+                if dt > 0 {
+                    let delta_bytes = ((progress_f - task.prev_progress).abs() / 100.0) * task.file.size as f64;
+                    let speed = (delta_bytes / dt as f64 * 1000.0) as u64;
+                    task.speed = speed;
+                }
+                task.prev_progress = progress_f;
+                task.prev_ts = Some(now);
+            }
+
+            if task.progress != progress || task.speed > 0 {
                 task.progress = progress;
                 let _ = queue_manager.update_task(task.id.clone(), task.clone()).await;
             }
