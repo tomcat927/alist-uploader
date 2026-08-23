@@ -129,6 +129,27 @@ impl QueueManager {
 
         Ok(None)
     }
+
+    async fn record_blocked_file(
+        &self,
+        file_path: &str,
+        file_name: &str,
+        file_size: u64,
+        reason: &str,
+    ) {
+        let record = BlockedFileRecord {
+            file_path: file_path.to_string(),
+            file_name: file_name.to_string(),
+            file_size,
+            reason: reason.to_string(),
+            blocked_at: chrono::Utc::now(),
+        };
+        let mut data = Storage::load_blocked_files().unwrap_or_default();
+        data.records.push(record);
+        if let Err(e) = Storage::save_blocked_files(&data) {
+            log(&format!("保存拦截记录失败: {}", e));
+        }
+    }
     
     async fn add_single_file_to_queue(&self, file_info: &crate::models::FileInfo, alist_path: &str) -> Result<UploadTask, Box<dyn std::error::Error>> {
         let target_path = if let Some(ref relative_path) = file_info.relative_path {
