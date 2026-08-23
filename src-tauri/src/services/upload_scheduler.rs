@@ -24,12 +24,15 @@ impl UploadScheduler {
 
         // 重置停止标志，确保新上传可以正常启动
         self.queue_manager.set_stop_after_current(false);
+        self.queue_manager.reset_tasks_uploaded();
 
         log("上传调度器启动");
         self.queue_manager.set_uploading(true);
         let config = self.queue_manager.config.read().await;
         let rate_limiter = Arc::new(RateLimiter::new(config.upload.speed_limit));
         drop(config);
+
+        let mut max_tasks_reached_logged = false;
 
         loop {
             if !self.queue_manager.is_uploading() {
@@ -38,6 +41,23 @@ impl UploadScheduler {
             }
 
             let config = self.queue_manager.config.read().await;
+
+            if config.upload.max_tasks_per_run > 0
+                && self.queue_manager.tasks_uploaded_in_run() >= config.upload.max_tasks_per_run
+            {
+                let limit = config.upload.max_tasks_per_run;
+                drop(config);
+                if self.get_active_task_count().await == 0 {
+                    log(&format!("已达到本次上传任务数上限（{} 个），上传调度器自动结束", limit));
+                    break;
+                }
+                if !max_tasks_reached_logged {
+                    log(&format!("已达到本次上传任务数上限（{} 个），等待当前任务完成后结束", limit));
+                    max_tasks_reached_logged = true;
+                }
+                sleep(Duration::from_millis(1000)).await;
+                continue;
+            }
             
             if !self.can_start_new_task(&config).await {
                 drop(config);
@@ -149,6 +169,7 @@ impl UploadScheduler {
             Ok(_) => {
                 log(&format!("上传成功: file={}, size={}B, alist_path={}", task.file.name, task.file.size, task.alist_path));
                 task.mark_completed();
+                queue_manager.increment_tasks_uploaded();
                 let _ = queue_manager.add_to_history(task.clone()).await;
                 let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
             }

@@ -1,6 +1,6 @@
 pub use dashmap::DashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use crate::models::*;
@@ -17,6 +17,7 @@ pub struct QueueManager {
     pub processing_tasks: Arc<DashMap<String, UploadTask>>,
     is_uploading: Arc<AtomicBool>,
     stop_after_current: Arc<AtomicBool>,
+    tasks_uploaded_in_run: Arc<AtomicU32>,
 }
 
 impl QueueManager {
@@ -39,6 +40,7 @@ impl QueueManager {
             processing_tasks: Arc::new(DashMap::new()),
             is_uploading: Arc::new(AtomicBool::new(false)),
             stop_after_current: Arc::new(AtomicBool::new(false)),
+            tasks_uploaded_in_run: Arc::new(AtomicU32::new(0)),
         })
     }
 
@@ -268,6 +270,7 @@ impl QueueManager {
             processing_tasks: Arc::clone(&self.processing_tasks),
             is_uploading: Arc::clone(&self.is_uploading),
             stop_after_current: Arc::clone(&self.stop_after_current),
+            tasks_uploaded_in_run: Arc::clone(&self.tasks_uploaded_in_run),
         })
     }
 
@@ -277,6 +280,18 @@ impl QueueManager {
 
     pub fn set_stop_after_current(&self, value: bool) {
         self.stop_after_current.store(value, Ordering::SeqCst);
+    }
+
+    pub fn tasks_uploaded_in_run(&self) -> u32 {
+        self.tasks_uploaded_in_run.load(Ordering::SeqCst)
+    }
+
+    pub fn increment_tasks_uploaded(&self) {
+        self.tasks_uploaded_in_run.fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub fn reset_tasks_uploaded(&self) {
+        self.tasks_uploaded_in_run.store(0, Ordering::SeqCst);
     }
 
     pub async fn mark_queue_failed(

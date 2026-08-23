@@ -214,6 +214,9 @@ pub struct UploadConfig {
     pub notify_on_complete: bool,
     #[serde(default)]
     pub minimize_on_close: bool,
+    /// 每轮上传任务数上限，0 表示不限
+    #[serde(default)]
+    pub max_tasks_per_run: u32,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
 }
@@ -245,6 +248,7 @@ impl Default for UploadConfig {
             show_progress: false,
             notify_on_complete: false,
             minimize_on_close: true,
+            max_tasks_per_run: 0,
             schedule: Some(ScheduledUpload::default()),
             notification: None,
         }
