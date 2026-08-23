@@ -55,6 +55,8 @@ pub struct AlistTaskResp {
     #[serde(default)]
     pub progress: f64,
     #[serde(default)]
+    pub speed: u64,
+    #[serde(default)]
     pub status: String,
     #[serde(default)]
     pub error: String,

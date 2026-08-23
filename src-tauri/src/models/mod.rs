@@ -38,12 +38,6 @@ pub struct UploadTask {
     /// 上传速度（字节/秒），仅 status=uploading 时有效，前端用于显示
     #[serde(default)]
     pub speed: u64,
-    /// 上一次轮询的进度百分比（0.0-100.0），仅内存使用，不持久化
-    #[serde(skip)]
-    pub prev_progress: f64,
-    /// 上一次轮询的时间戳，仅内存使用，不持久化
-    #[serde(skip)]
-    pub prev_ts: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -80,8 +74,6 @@ impl UploadTask {
             created_at: Utc::now(),
             updated_at: Utc::now(),
             speed: 0,
-            prev_progress: 0.0,
-            prev_ts: None,
         }
     }
 
@@ -96,8 +88,6 @@ impl UploadTask {
         self.updated_at = Utc::now();
         self.error = None;
         self.speed = 0;
-        self.prev_progress = 0.0;
-        self.prev_ts = None;
     }
 
     pub fn mark_completed(&mut self) {
