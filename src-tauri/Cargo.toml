@@ -15,7 +15,7 @@ name = "alist_uploader_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = ["tray-icon"] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
@@ -38,5 +38,3 @@ dirs = "5"
 dashmap = "5"
 log = "0.4"
 walkdir = "2"
-
-
