@@ -330,3 +330,42 @@ pub async fn cancel_shutdown(
         }
     }
 }
+
+#[tauri::command]
+pub async fn open_file_location(file_path: String) -> Result<(), String> {
+    let path = std::path::Path::new(&file_path);
+    if !path.exists() {
+        return Err(format!("文件不存在: {}", file_path));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer.exe")
+            .args(["/select,", &file_path])
+            .spawn()
+            .map_err(|e| {
+                log(&format!("打开文件所在目录失败: path={}, error={}", file_path, e));
+                e.to_string()
+            })?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-R", &file_path])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = path.parent().unwrap_or(std::path::Path::new("."));
+        std::process::Command::new("xdg-open")
+            .arg(parent)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    log(&format!("已打开文件所在目录: {}", file_path));
+    Ok(())
+}

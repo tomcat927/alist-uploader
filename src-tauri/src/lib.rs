@@ -156,6 +156,7 @@ pub fn run() {
            crate::commands::clear_blocked_files,
            crate::commands::get_shutdown_state,
            crate::commands::cancel_shutdown,
+           crate::commands::open_file_location,
        ])
         .run(tauri::generate_context!());
 

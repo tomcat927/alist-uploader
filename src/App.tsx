@@ -300,17 +300,26 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     return () => window.clearInterval(intervalId);
   }, [shutdownDeadline]);
 
-  const handleCancelShutdown = async () => {
+ const handleCancelShutdown = async () => {
+   try {
+     await invoke('cancel_shutdown');
+     setShutdownDeadline(null);
+     setShutdownCountdown('');
+   } catch (error) {
+     console.error('取消关机失败:', error);
+   }
+ };
+
+  const handleOpenFileLocation = async (filePath: string) => {
     try {
-      await invoke('cancel_shutdown');
-      setShutdownDeadline(null);
-      setShutdownCountdown('');
+      await invoke('open_file_location', { filePath });
     } catch (error) {
-      console.error('取消关机失败:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      window.alert(`打开文件所在目录失败: ${message}`);
     }
   };
 
-  const persistAlistPath = (path: string) => {
+ const persistAlistPath = (path: string) => {
     const normalizedPath = normalizeAlistPath(path);
     setAlistPath(normalizedPath);
     alistPathRef.current = normalizedPath;
@@ -776,15 +785,22 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                               重试
                             </button>
                           )}
-                          <button 
-                            onClick={() => removeFromQueue(task.id)}
-                            className="small danger"
-                          >
-                            删除
-                          </button>
-                        </td>
-                      </tr>
-                      {expandedTaskId === task.id && (
+                         <button 
+                           onClick={() => removeFromQueue(task.id)}
+                           className="small danger"
+                         >
+                           删除
+                         </button>
+                         <button
+                           onClick={() => handleOpenFileLocation(task.file.path)}
+                           className="small"
+                           title="打开文件所在目录"
+                         >
+                           定位
+                         </button>
+                       </td>
+                     </tr>
+                     {expandedTaskId === task.id && (
                         <tr className="task-detail-row">
                           <td colSpan={6}>
                             <div className="task-path-detail">
@@ -923,11 +939,18 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       <td>{formatFileSize(record.file_size)}</td>
                       <td>{record.reason}</td>
                       <td>{new Date(record.blocked_at).toLocaleString()}</td>
-                      <td>
-                        <button onClick={() => removeBlockedFile(index)} className="small danger">
-                          删除
-                        </button>
-                      </td>
+                     <td>
+                       <button onClick={() => removeBlockedFile(index)} className="small danger">
+                         删除
+                       </button>
+                       <button
+                         onClick={() => handleOpenFileLocation(record.file_path)}
+                         className="small"
+                         title="打开文件所在目录"
+                       >
+                         定位
+                       </button>
+                     </td>
                     </tr>
                   ))}
                 </tbody>
