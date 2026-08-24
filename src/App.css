@@ -1276,3 +1276,59 @@ tr:last-child td {
   font-size: 0.75rem;
   text-align: right;
 }
+
+/* Shutdown countdown overlay */
+.shutdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.shutdown-dialog {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 2rem 2.5rem;
+  min-width: 340px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+.shutdown-dialog h3 {
+  margin-bottom: 1rem;
+  font-size: 1.15rem;
+  color: var(--text-color);
+}
+
+.shutdown-countdown {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #e85d3c;
+  margin-bottom: 0.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.shutdown-hint {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.shutdown-cancel-btn {
+  padding: 0.5rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.shutdown-cancel-btn:hover {
+  opacity: 0.85;
+}

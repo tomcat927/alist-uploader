@@ -61,7 +61,9 @@ function App() {
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
 const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
- const [appVersion, setAppVersion] = useState('');
+const [appVersion, setAppVersion] = useState('');
+  const [shutdownDeadline, setShutdownDeadline] = useState<string | null>(null);
+  const [shutdownCountdown, setShutdownCountdown] = useState('');
 const historyRetryTimerRef = useRef<Record<string, number>>({});
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
@@ -240,10 +242,15 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
         await loadHistory();
         const latestQueue = useAppStore.getState().queue;
         const backendUploading = await invoke<boolean>('get_is_uploading');
-        if (!backendUploading) {
-          setIsUploading(false);
-          await writeClientLog('上传调度器已停止，前端关闭上传中状态');
-        }
+       if (!backendUploading) {
+         setIsUploading(false);
+         await writeClientLog('上传调度器已停止，前端关闭上传中状态');
+
+          const shutdownState = await invoke<string | null>('get_shutdown_state');
+          if (shutdownState) {
+            setShutdownDeadline(shutdownState);
+          }
+       }
 
         // 检测新完成的任务，发送系统通知
         const notifyOnComplete = useAppStore.getState().config.upload.notify_on_complete;
@@ -271,6 +278,37 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
     return () => window.clearInterval(intervalId);
   }, [isUploading, loadQueue, loadHistory, setIsUploading]);
+
+  // 关机倒计时
+  useEffect(() => {
+    if (!shutdownDeadline) return;
+
+    const updateCountdown = () => {
+      const deadline = new Date(shutdownDeadline).getTime();
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        setShutdownCountdown('正在关机...');
+        return;
+      }
+      const minutes = Math.floor(remaining / 60000);
+      const seconds = Math.floor((remaining % 60000) / 1000);
+      setShutdownCountdown(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+    };
+
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [shutdownDeadline]);
+
+  const handleCancelShutdown = async () => {
+    try {
+      await invoke('cancel_shutdown');
+      setShutdownDeadline(null);
+      setShutdownCountdown('');
+    } catch (error) {
+      console.error('取消关机失败:', error);
+    }
+  };
 
   const persistAlistPath = (path: string) => {
     const normalizedPath = normalizeAlistPath(path);
@@ -335,9 +373,11 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     }
   };
 
-  const handleStartUpload = async () => {
-    const rootTargetTask = queue.find(task => isRootAlistPath(task.alist_path));
-    if (rootTargetTask) {
+ const handleStartUpload = async () => {
+   const rootTargetTask = queue.find(task => isRootAlistPath(task.alist_path));
+   setShutdownDeadline(null);
+   setShutdownCountdown('');
+   if (rootTargetTask) {
       const message = `队列中存在目标目录为 / 的任务：${rootTargetTask.file.name}。请删除该任务后选择具体目录重新添加。`;
       setUploadPathError(message);
       await writeClientLog(`开始上传被拦截: task_id=${rootTargetTask.id}, file=${rootTargetTask.file.name}, target_path=/`);
@@ -1279,6 +1319,41 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
               <div className="form-group checkbox-group">
                 <input
                   type="checkbox"
+                  id="shutdownAfterComplete"
+                  checked={configForm.upload.shutdown_after_complete || false}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: {
+                      ...configForm.upload,
+                      shutdown_after_complete: e.target.checked
+                    }
+                  })}
+                />
+                <label htmlFor="shutdownAfterComplete">上传完成后关闭电脑</label>
+              </div>
+              {configForm.upload.shutdown_after_complete && (
+                <div className="form-group">
+                  <label>关机延迟:</label>
+                  <select
+                    value={configForm.upload.shutdown_delay_minutes}
+                    onChange={(e) => setConfigForm({
+                      ...configForm,
+                      upload: {
+                        ...configForm.upload,
+                        shutdown_delay_minutes: Number(e.target.value)
+                      }
+                    })}
+                  >
+                    <option value={10}>10 分钟</option>
+                    <option value={30}>30 分钟</option>
+                    <option value={60}>1 小时</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
                   id="enableSchedule"
                   checked={configForm.upload.schedule?.enabled || false}
                   onChange={(e) => setConfigForm({
@@ -1438,10 +1513,22 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
               {downloadSizeText && <span>{downloadSizeText}</span>}
             </div>
           </div>
+       </div>
+     )}
+      {shutdownDeadline && (
+        <div className="shutdown-overlay" onClick={(e) => e.stopPropagation()}>
+          <div className="shutdown-dialog">
+            <h3>电脑即将关机</h3>
+            <p className="shutdown-countdown">{shutdownCountdown}</p>
+            <p className="shutdown-hint">上传队列已完成，电脑将自动关闭</p>
+            <button className="shutdown-cancel-btn" onClick={handleCancelShutdown}>
+              取消关机
+            </button>
+          </div>
         </div>
       )}
-    </div>
-  );
+   </div>
+ );
 }
 
 export default App;

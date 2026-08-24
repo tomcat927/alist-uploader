@@ -302,3 +302,31 @@ pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<String, S
         e.to_string()
     })
 }
+
+#[tauri::command]
+pub async fn get_shutdown_state(
+    queue_manager: State<'_, QueueManager>,
+) -> Result<Option<String>, String> {
+    let deadline = queue_manager.get_shutdown_deadline().await;
+    Ok(deadline.map(|d| d.to_rfc3339()))
+}
+
+#[tauri::command]
+pub async fn cancel_shutdown(
+    queue_manager: State<'_, QueueManager>,
+) -> Result<(), String> {
+    match std::process::Command::new("shutdown")
+        .args(["/a"])
+        .spawn()
+    {
+        Ok(_) => {
+            queue_manager.clear_shutdown_deadline().await;
+            log("已取消定时关机");
+            Ok(())
+        }
+        Err(e) => {
+            log(&format!("取消关机失败: {}", e));
+            Err(e.to_string())
+        }
+    }
+}

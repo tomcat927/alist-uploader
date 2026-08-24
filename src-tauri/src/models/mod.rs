@@ -215,6 +215,10 @@ pub struct UploadConfig {
    #[serde(default)]
    pub notify_feishu_on_queue_complete: bool,
    #[serde(default)]
+   pub shutdown_after_complete: bool,
+   #[serde(default = "default_shutdown_delay_minutes")]
+   pub shutdown_delay_minutes: u32,
+   #[serde(default)]
    pub minimize_on_close: bool,
     /// 每轮上传任务数上限，0 表示不限
     #[serde(default)]
@@ -225,6 +229,10 @@ pub struct UploadConfig {
 
 fn default_upload_method() -> String {
     "stream".to_string()
+}
+
+fn default_shutdown_delay_minutes() -> u32 {
+    10
 }
 
 fn default_alist_path() -> String {
@@ -250,6 +258,8 @@ impl Default for UploadConfig {
             show_progress: false,
            notify_on_complete: false,
            notify_feishu_on_queue_complete: false,
+           shutdown_after_complete: false,
+           shutdown_delay_minutes: 10,
            minimize_on_close: true,
             max_tasks_per_run: 0,
             schedule: Some(ScheduledUpload::default()),

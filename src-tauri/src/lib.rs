@@ -151,10 +151,12 @@ pub fn run() {
             crate::commands::write_client_log,
             crate::commands::test_notification,
             crate::commands::alist_list_dir,
-            crate::commands::get_blocked_files,
-            crate::commands::remove_blocked_file,
-            crate::commands::clear_blocked_files,
-        ])
+           crate::commands::get_blocked_files,
+           crate::commands::remove_blocked_file,
+           crate::commands::clear_blocked_files,
+           crate::commands::get_shutdown_state,
+           crate::commands::cancel_shutdown,
+       ])
         .run(tauri::generate_context!());
 
     if let Err(error) = result {

@@ -3,6 +3,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use chrono::{DateTime, Utc};
 use crate::models::*;
 use crate::utils::storage::Storage;
 use crate::utils::log::log;
@@ -19,6 +20,7 @@ pub struct QueueManager {
    stop_after_current: Arc<AtomicBool>,
    tasks_uploaded_in_run: Arc<AtomicU32>,
    tasks_failed_in_run: Arc<AtomicU32>,
+   shutdown_deadline: Arc<RwLock<Option<DateTime<Utc>>>>,
 }
 
 impl QueueManager {
@@ -43,6 +45,7 @@ impl QueueManager {
             stop_after_current: Arc::new(AtomicBool::new(false)),
            tasks_uploaded_in_run: Arc::new(AtomicU32::new(0)),
            tasks_failed_in_run: Arc::new(AtomicU32::new(0)),
+           shutdown_deadline: Arc::new(RwLock::new(None)),
        })
     }
 
@@ -287,6 +290,7 @@ impl QueueManager {
             stop_after_current: Arc::clone(&self.stop_after_current),
            tasks_uploaded_in_run: Arc::clone(&self.tasks_uploaded_in_run),
            tasks_failed_in_run: Arc::clone(&self.tasks_failed_in_run),
+           shutdown_deadline: Arc::clone(&self.shutdown_deadline),
        })
     }
 
@@ -318,6 +322,21 @@ impl QueueManager {
        self.tasks_uploaded_in_run.store(0, Ordering::SeqCst);
        self.tasks_failed_in_run.store(0, Ordering::SeqCst);
    }
+
+    pub async fn set_shutdown_deadline(&self, deadline: DateTime<Utc>) {
+        let mut guard = self.shutdown_deadline.write().await;
+        *guard = Some(deadline);
+    }
+
+    pub async fn clear_shutdown_deadline(&self) {
+        let mut guard = self.shutdown_deadline.write().await;
+        *guard = None;
+    }
+
+    pub async fn get_shutdown_deadline(&self) -> Option<DateTime<Utc>> {
+        let guard = self.shutdown_deadline.read().await;
+        *guard
+    }
 
     pub async fn mark_queue_failed(
         &self,

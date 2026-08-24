@@ -26,6 +26,13 @@ impl UploadScheduler {
        self.queue_manager.set_stop_after_current(false);
        self.queue_manager.reset_tasks_uploaded();
 
+       // 取消上一轮可能遗留的定时关机
+       if self.queue_manager.get_shutdown_deadline().await.is_some() {
+           let _ = std::process::Command::new("shutdown").args(["/a"]).spawn();
+           self.queue_manager.clear_shutdown_deadline().await;
+           log("启动新上传任务，已取消上一轮遗留的定时关机");
+       }
+
        let scheduler_start = chrono::Local::now();
 
        log("上传调度器启动");
@@ -121,9 +128,34 @@ impl UploadScheduler {
                        )
                        .await;
                    }
+              }
+          }
+
+           if config.upload.shutdown_after_complete
+               && (self.queue_manager.tasks_uploaded_in_run() > 0
+                   || self.queue_manager.tasks_failed_in_run() > 0)
+           {
+               let delay_minutes = config.upload.shutdown_delay_minutes;
+               let delay_seconds = delay_minutes * 60;
+               match std::process::Command::new("shutdown")
+                   .args(["/s", "/t", &delay_seconds.to_string()])
+                   .spawn()
+               {
+                   Ok(_) => {
+                       let deadline = chrono::Utc::now()
+                           + chrono::Duration::seconds(delay_seconds as i64);
+                       self.queue_manager.set_shutdown_deadline(deadline).await;
+                       log(&format!(
+                           "已调度关机: delay={}分钟({}秒后)",
+                           delay_minutes, delay_seconds
+                       ));
+                   }
+                   Err(e) => {
+                       log(&format!("调度关机失败: {}", e));
+                   }
                }
            }
-           drop(config);
+          drop(config);
        }
 
        self.queue_manager.set_uploading(false);

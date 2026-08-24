@@ -81,6 +81,8 @@ export interface UploadConfig {
   show_progress: boolean;
  notify_on_complete: boolean;
  notify_feishu_on_queue_complete: boolean;
+ shutdown_after_complete: boolean;
+ shutdown_delay_minutes: number;
  minimize_on_close: boolean;
   schedule?: ScheduledUpload;
   notification?: NotificationConfig;
@@ -120,6 +122,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     show_progress: false,
    notify_on_complete: false,
    notify_feishu_on_queue_complete: false,
+   shutdown_after_complete: false,
+   shutdown_delay_minutes: 10,
    minimize_on_close: true,
     schedule: {
       enabled: false,
