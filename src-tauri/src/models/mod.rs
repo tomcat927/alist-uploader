@@ -210,10 +210,12 @@ pub struct UploadConfig {
     pub warn_files_over_4gb: bool,
     pub file_exists_strategy: FileExistsStrategy,
     pub show_progress: bool,
-    #[serde(default)]
-    pub notify_on_complete: bool,
-    #[serde(default)]
-    pub minimize_on_close: bool,
+   #[serde(default)]
+   pub notify_on_complete: bool,
+   #[serde(default)]
+   pub notify_feishu_on_queue_complete: bool,
+   #[serde(default)]
+   pub minimize_on_close: bool,
     /// 每轮上传任务数上限，0 表示不限
     #[serde(default)]
     pub max_tasks_per_run: u32,
@@ -246,8 +248,9 @@ impl Default for UploadConfig {
             warn_files_over_4gb: true,
             file_exists_strategy: FileExistsStrategy::default(),
             show_progress: false,
-            notify_on_complete: false,
-            minimize_on_close: true,
+           notify_on_complete: false,
+           notify_feishu_on_queue_complete: false,
+           minimize_on_close: true,
             max_tasks_per_run: 0,
             schedule: Some(ScheduledUpload::default()),
             notification: None,

@@ -79,8 +79,9 @@ export interface UploadConfig {
     strategy: string;
   };
   show_progress: boolean;
-  notify_on_complete: boolean;
-  minimize_on_close: boolean;
+ notify_on_complete: boolean;
+ notify_feishu_on_queue_complete: boolean;
+ minimize_on_close: boolean;
   schedule?: ScheduledUpload;
   notification?: NotificationConfig;
 }
@@ -117,8 +118,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
       strategy: 'ask',
     },
     show_progress: false,
-    notify_on_complete: false,
-    minimize_on_close: true,
+   notify_on_complete: false,
+   notify_feishu_on_queue_complete: false,
+   minimize_on_close: true,
     schedule: {
       enabled: false,
       start_time: '03:00',

@@ -1250,10 +1250,25 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       })}
                     />
                   </div>
-                  <div className="notification-notice">
-                    ℹ️ 当文件上传失败超过重试阈值时，将发送通知并停止队列
-                  </div>
-                  <div className="settings-actions">
+                 <div className="notification-notice">
+                   ℹ️ 当文件上传失败超过重试阈值时，将发送通知并停止队列
+                 </div>
+                 <div className="form-group checkbox-group">
+                   <input
+                     type="checkbox"
+                     id="notifyFeishuOnQueueComplete"
+                     checked={configForm.upload.notify_feishu_on_queue_complete || false}
+                     onChange={(e) => setConfigForm({
+                       ...configForm,
+                       upload: {
+                         ...configForm.upload,
+                         notify_feishu_on_queue_complete: e.target.checked
+                       }
+                     })}
+                   />
+                   <label htmlFor="notifyFeishuOnQueueComplete">队列上传完成后发送飞书通知</label>
+                 </div>
+                 <div className="settings-actions">
                     <button onClick={handleTestNotification} className="secondary small">
                       发送测试通知
                     </button>

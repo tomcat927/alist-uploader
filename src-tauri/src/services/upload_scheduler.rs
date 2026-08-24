@@ -23,10 +23,12 @@ impl UploadScheduler {
         }
 
         // 重置停止标志，确保新上传可以正常启动
-        self.queue_manager.set_stop_after_current(false);
-        self.queue_manager.reset_tasks_uploaded();
+       self.queue_manager.set_stop_after_current(false);
+       self.queue_manager.reset_tasks_uploaded();
 
-        log("上传调度器启动");
+       let scheduler_start = chrono::Local::now();
+
+       log("上传调度器启动");
         self.queue_manager.set_uploading(true);
         let config = self.queue_manager.config.read().await;
         let rate_limiter = Arc::new(RateLimiter::new(config.upload.speed_limit));
@@ -94,10 +96,38 @@ impl UploadScheduler {
                 drop(config);
                 sleep(Duration::from_millis(1000)).await;
             }
-        }
+       }
 
-        self.queue_manager.set_uploading(false);
-        log("上传调度器已停止");
+       // 队列自然完成或达到任务上限时发送飞书通知（手动停止或失败停止不发）
+       if !self.queue_manager.stop_after_current() {
+           let config = self.queue_manager.config.read().await;
+           if config.upload.notify_feishu_on_queue_complete
+               && (self.queue_manager.tasks_uploaded_in_run() > 0
+                   || self.queue_manager.tasks_failed_in_run() > 0)
+           {
+               if let Some(notification) = &config.upload.notification {
+                   if notification.enabled && !notification.webhook_url.is_empty() {
+                       let succeeded = self.queue_manager.tasks_uploaded_in_run();
+                       let failed = self.queue_manager.tasks_failed_in_run();
+                       let total = succeeded + failed;
+                       let end_time = chrono::Local::now();
+                       Self::send_queue_complete_notification(
+                           notification,
+                           total,
+                           succeeded,
+                           failed,
+                           scheduler_start,
+                           end_time,
+                       )
+                       .await;
+                   }
+               }
+           }
+           drop(config);
+       }
+
+       self.queue_manager.set_uploading(false);
+       log("上传调度器已停止");
     }
 
     async fn can_start_new_task(&self, config: &AppConfig) -> bool {
@@ -178,9 +208,10 @@ impl UploadScheduler {
                 let config = queue_manager.config.read().await;
                 let max_retries = config.upload.max_retries;
                 if task.retry_count >= max_retries {
-                    log(&format!("达到最大重试次数({})，标记为失败: file={}", max_retries, task.file.name));
-                    task.mark_failed(e.clone());
-                    let _ = queue_manager.add_to_history(task.clone()).await;
+                   log(&format!("达到最大重试次数({})，标记为失败: file={}", max_retries, task.file.name));
+                   task.mark_failed(e.clone());
+                   queue_manager.increment_tasks_failed();
+                   let _ = queue_manager.add_to_history(task.clone()).await;
                     let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
                     
                     let _ = queue_manager.mark_queue_failed(task.file.name.clone(), e.clone()).await;
@@ -441,7 +472,73 @@ impl UploadScheduler {
         log::info!("测试通知发送成功");
         Ok(())
     }
-    pub async fn send_schedule_notification(
+   async fn send_queue_complete_notification(
+       notification: &NotificationConfig,
+       total: u32,
+       succeeded: u32,
+       failed: u32,
+       start_time: chrono::DateTime<chrono::Local>,
+       end_time: chrono::DateTime<chrono::Local>,
+   ) {
+       let duration = end_time - start_time;
+       let duration_str = format_duration(duration);
+       let start_str = start_time.format("%Y-%m-%d %H:%M:%S").to_string();
+       let end_str = end_time.format("%Y-%m-%d %H:%M:%S").to_string();
+
+       let (title, template) = if failed > 0 {
+           ("上传队列完成（含失败）", "orange")
+       } else {
+           ("上传队列完成", "green")
+       };
+
+       let message = format!(
+           "## 上传队列已完成\n\n\
+            **开始时间**: {}\n\
+            **结束时间**: {}\n\
+            **耗时**: {}\n\
+            **总任务数**: {}\n\
+            **成功**: {}\n\
+            **失败**: {}",
+           start_str, end_str, duration_str, total, succeeded, failed
+       );
+
+       let payload = serde_json::json!({
+           "msg_type": "interactive",
+           "card": {
+               "header": {
+                   "title": {
+                       "tag": "plain_text",
+                       "content": title
+                   },
+                   "template": template
+               },
+               "elements": [{
+                   "tag": "div",
+                   "text": {
+                       "tag": "lark_md",
+                       "content": message
+                   }
+               }]
+           }
+       });
+
+       for channel in &notification.channels {
+           match channel.as_str() {
+               "feishu" => {
+                   if let Err(e) = Self::post_feishu_card(&notification.webhook_url, &payload).await {
+                       log::error!("发送队列完成通知失败: {}", e);
+                   } else {
+                       log::info!("队列完成通知发送成功: total={}, succeeded={}, failed={}", total, succeeded, failed);
+                   }
+               }
+               _ => {
+                   log::warn!("不支持的通知渠道: {}", channel);
+               }
+           }
+       }
+   }
+
+   pub async fn send_schedule_notification(
         notification: &NotificationConfig,
         event_type: &str,
     ) {
@@ -503,8 +600,23 @@ impl UploadScheduler {
             .map(|_| ())
     }
 
-    pub fn stop_scheduler(&self) {
-        self.queue_manager.set_uploading(false);
+   pub fn stop_scheduler(&self) {
+       self.queue_manager.set_uploading(false);
+   }
+}
+
+fn format_duration(duration: chrono::Duration) -> String {
+    let total_secs = duration.num_seconds();
+    let hours = total_secs / 3600;
+    let minutes = (total_secs % 3600) / 60;
+    let seconds = total_secs % 60;
+
+    if hours > 0 {
+        format!("{}小时{}分钟{}秒", hours, minutes, seconds)
+    } else if minutes > 0 {
+        format!("{}分钟{}秒", minutes, seconds)
+    } else {
+        format!("{}秒", seconds)
     }
 }
 
