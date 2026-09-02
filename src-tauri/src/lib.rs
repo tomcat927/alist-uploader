@@ -6,6 +6,7 @@ use tauri::Manager;
 use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
+use std::process::Command;
 
 fn append_log(file_name: &str, message: &str) {
     use std::fs::{self, OpenOptions};
@@ -36,6 +37,35 @@ fn install_panic_hook() {
     }));
 }
 
+// 全局存储 Alist 可执行文件路径和子进程 PID，供退出时关闭使用
+pub static ALIST_EXE_PATH: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+pub static ALIST_CHILD_PID: std::sync::Mutex<Option<u32>> = std::sync::Mutex::new(None);
+
+/// 退出时关闭 Alist 进程
+fn kill_alist_on_exit() {
+    let exe_path = ALIST_EXE_PATH.lock().unwrap().clone();
+    if let Some(exe) = exe_path {
+        // 尝试通过 taskkill 关闭由本应用启动的 Alist 进程
+        let pid_opt = ALIST_CHILD_PID.lock().unwrap().clone();
+        if let Some(pid) = pid_opt {
+            let _ = Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .output();
+            append_log("startup.log", &format!("退出时已关闭 Alist 进程, pid={}", pid));
+        } else {
+            // 如果没有 PID（可能是配置变更前启动的），用 exe 名做备用
+            let exe_name = std::path::Path::new(&exe)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("alist.exe");
+            let _ = Command::new("taskkill")
+                .args(["/IM", exe_name, "/T", "/F"])
+                .output();
+            append_log("startup.log", &format!("退出时按名称关闭 Alist: {}", exe_name));
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     install_panic_hook();
@@ -54,7 +84,7 @@ pub fn run() {
     append_log("startup.log", "queue manager initialized");
     crate::utils::log::log("queue manager initialized; managed_type=QueueManager");
 
-    let result = tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(queue_manager)
         .setup(move |app| {
             append_log("startup.log", "tauri setup begin");
@@ -65,6 +95,48 @@ pub fn run() {
                 schedule_manager.start_schedule_monitor().await;
                 append_log("startup.log", "schedule monitor stopped");
             });
+
+            // 如果配置了 Alist 可执行文件路径，启动时自动启动 Alist
+            let qm = app.state::<crate::services::queue_manager::QueueManager>();
+            let config = qm.config.blocking_read();
+            let alist_exe = config.alist.exe_path.clone();
+            let base_url = config.alist.base_url.clone();
+            let kill_on_exit = config.alist.kill_on_exit;
+            drop(config);
+
+            if !alist_exe.is_empty() && kill_on_exit {
+                // 存到全局供退出时使用
+                *crate::ALIST_EXE_PATH.lock().unwrap() = Some(alist_exe.clone());
+            }
+
+            if !alist_exe.is_empty() {
+                tauri::async_runtime::spawn(async move {
+                    // 先检测 Alist 是否已在运行
+                    let already_running = reqwest::Client::new()
+                        .get(format!("{}/ping", base_url.trim_end_matches('/')))
+                        .timeout(std::time::Duration::from_secs(2))
+                        .send()
+                        .await
+                        .map(|r| r.status().is_success())
+                        .unwrap_or(false);
+
+                    if already_running {
+                        append_log("startup.log", "Alist 已在运行，跳过自动启动");
+                        return;
+                    }
+
+                    append_log("startup.log", &format!("正在启动 Alist: {}", alist_exe));
+                    match Command::new(&alist_exe).spawn() {
+                        Ok(child) => {
+                            append_log("startup.log", &format!("Alist 进程已启动, pid={}", child.id()));
+                            *crate::ALIST_CHILD_PID.lock().unwrap() = Some(child.id());
+                        }
+                        Err(e) => {
+                            append_log("startup.log", &format!("启动 Alist 失败: {}", e));
+                        }
+                    }
+                });
+            }
 
             // 创建系统托盘图标，用于窗口最小化到托盘后恢复
             let img = image::load_from_memory(include_bytes!("../icons/icon.png"))
@@ -158,11 +230,16 @@ pub fn run() {
            crate::commands::cancel_shutdown,
            crate::commands::open_file_location,
        ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
 
-    if let Err(error) = result {
-        append_log("startup.log", &format!("tauri runtime error: {error:?}"));
-        panic!("error while running tauri application: {error:?}");
-    }
+    app.run(|_app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            kill_alist_on_exit();
+        }
+    });
+
+    // 兜底：确保退出时关闭 Alist
+    kill_alist_on_exit();
 }
 

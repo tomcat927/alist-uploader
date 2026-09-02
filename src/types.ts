@@ -41,6 +41,8 @@ export interface AlistConfig {
   username: string;
   password: string;
   auto_login: boolean;
+  exe_path: string;
+  kill_on_exit: boolean;
 }
 
 export interface DirItem {
@@ -105,6 +107,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     username: '',
     password: '',
     auto_login: true,
+    exe_path: '',
+    kill_on_exit: true,
   },
   upload: {
     concurrency: 1,

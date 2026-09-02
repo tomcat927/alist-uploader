@@ -137,6 +137,12 @@ pub struct AlistConfig {
     pub password: String,
     #[serde(default = "default_auto_login")]
     pub auto_login: bool,
+    /// Alist 可执行文件路径，填写后启动本软件时自动启动 Alist
+    #[serde(default)]
+    pub exe_path: String,
+    /// 退出本软件时同时关闭 Alist 进程
+    #[serde(default = "default_true")]
+    pub kill_on_exit: bool,
 }
 
 impl Default for AlistConfig {
@@ -147,6 +153,8 @@ impl Default for AlistConfig {
             username: String::new(),
             password: String::new(),
             auto_login: true,
+            exe_path: String::new(),
+            kill_on_exit: true,
         }
     }
 }

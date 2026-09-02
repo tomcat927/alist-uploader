@@ -1,49 +1,72 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { AppConfig, DirItem } from '../types';
 
 interface FolderPickerProps {
   value: string;
   onChange: (path: string) => void;
+  recentPaths: string[];
+  onAddRecentPath: (path: string) => void;
   disabled?: boolean;
 }
 
-export function FolderPicker({ value, onChange, disabled }: FolderPickerProps) {
+function normalizePath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed || trimmed === '/') return '/';
+  const withPrefix = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withPrefix.replace(/\/+$/, '') || '/';
+}
+
+function getPathSegments(path: string): { name: string; path: string }[] {
+  if (path === '/') return [{ name: '根目录', path: '/' }];
+  const parts = path.split('/').filter(Boolean);
+  const segments: { name: string; path: string }[] = [{ name: '根目录', path: '/' }];
+  let current = '';
+  for (const part of parts) {
+    current = current === '' ? `/${part}` : `${current}/${part}`;
+    segments.push({ name: part, path: current });
+  }
+  return segments;
+}
+
+export function FolderPicker({ value, onChange, recentPaths, onAddRecentPath, disabled }: FolderPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [currentPath, setCurrentPath] = useState('/');
+  const [browsingPath, setBrowsingPath] = useState('/');
   const [folders, setFolders] = useState<DirItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualDraft, setManualDraft] = useState('');
+  const [manualError, setManualError] = useState('');
+  const [manualVerifying, setManualVerifying] = useState(false);
 
-  const loadFolders = async (path: string) => {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const manualInputRef = useRef<HTMLInputElement>(null);
+
+  const isRoot = browsingPath === '/';
+  const isValueRoot = normalizePath(value) === '/';
+
+  const loadFolders = useCallback(async (path: string) => {
     setIsLoading(true);
     setError('');
     try {
       await invoke('write_client_log', { message: `打开 Alist 目录浏览: path=${path}` });
       const config = await invoke<AppConfig>('get_config');
       const alistConfig = config.alist;
-      
+
       if (!alistConfig.base_url) {
-        setError('请先配置 Alist 服务地址');
+        setError('请先在设置中配置 Alist 服务地址');
         await invoke('write_client_log', { message: 'Alist 目录浏览失败: base_url 为空' });
         return;
       }
 
-      if (!alistConfig.token) {
-        setError('请先登录获取 Token');
-        await invoke('write_client_log', { message: `Alist 目录浏览失败: token 为空, username=${alistConfig.username}` });
-        return;
-      }
-
-      const rawItems = await invoke<string>('alist_list_dir', {
-        config,
-        path
-      });
+      const rawItems = await invoke<string>('alist_list_dir', { config, path });
       const items = JSON.parse(rawItems || '[]') as DirItem[];
       const directories = items.filter(item => item.is_dir);
       await invoke('write_client_log', { message: `Alist 目录浏览成功: path=${path}, item_count=${items.length}, dir_count=${directories.length}` });
       setFolders(directories);
-      setCurrentPath(path);
+      setBrowsingPath(path);
     } catch (err: any) {
       const message = err instanceof Error ? err.message : String(err);
       setError(message);
@@ -51,90 +74,285 @@ export function FolderPicker({ value, onChange, disabled }: FolderPickerProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
-      loadFolders(value || '/');
+      const startPath = normalizePath(value || '/');
+      setBrowsingPath(startPath);
+      setSearchQuery('');
+      setShowManualInput(false);
+      setManualDraft('');
+      setManualError('');
+      loadFolders(startPath);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  const handleSelectFolder = (folderName: string) => {
-    const newPath = currentPath === '/' ? `/${folderName}` : `${currentPath}/${folderName}`;
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && !isLoading) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, isLoading]);
+
+  const handleOpen = () => setIsOpen(true);
+
+  const handleEnterFolder = (folderName: string) => {
+    const newPath = browsingPath === '/' ? `/${folderName}` : `${browsingPath}/${folderName}`;
+    setSearchQuery('');
     loadFolders(newPath);
   };
 
-  const handleNavigateUp = () => {
-    if (currentPath === '/') return;
-    const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
-    loadFolders(parentPath);
+  const handleNavigateTo = (path: string) => {
+    setSearchQuery('');
+    loadFolders(path);
   };
 
-  const handleSelectCurrent = () => {
-    onChange(currentPath);
+  const handleConfirm = () => {
+    if (isRoot || isLoading || error) return;
+    onChange(browsingPath);
+    onAddRecentPath(browsingPath);
     setIsOpen(false);
   };
 
+  const handleRetry = () => {
+    loadFolders(browsingPath);
+  };
+
+  const handleManualVerify = async () => {
+    const normalized = normalizePath(manualDraft);
+    if (normalized === '/') {
+      setManualError('根目录不能作为上传目标，请输入具体目录');
+      return;
+    }
+    setManualVerifying(true);
+    setManualError('');
+    try {
+      const config = await invoke<AppConfig>('get_config');
+      if (!config.alist.base_url) {
+        setManualError('请先在设置中配置 Alist 服务地址');
+        return;
+      }
+      const rawItems = await invoke<string>('alist_list_dir', { config, path: normalized });
+      const items = JSON.parse(rawItems || '[]') as DirItem[];
+      await invoke('write_client_log', { message: `手输路径验证成功: path=${normalized}, item_count=${items.length}` });
+      setBrowsingPath(normalized);
+      setFolders(items.filter(item => item.is_dir));
+      setSearchQuery('');
+      setShowManualInput(false);
+      setManualDraft('');
+    } catch (err: any) {
+      const message = err instanceof Error ? err.message : String(err);
+      setManualError(`目录不存在或无法访问：${message}`);
+      await invoke('write_client_log', { message: `手输路径验证失败: path=${normalized}, error=${message}` });
+    } finally {
+      setManualVerifying(false);
+    }
+  };
+
+  const filteredFolders = searchQuery
+    ? folders.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : folders;
+
+  const segments = getPathSegments(browsingPath);
+  const canConfirm = !isRoot && !isLoading && !error;
+
   return (
-    <div className="folder-picker">
-      <div className="folder-picker-input">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="/dav/path"
-          disabled={disabled}
-        />
-        <button 
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          disabled={disabled}
-          className="secondary"
-        >
-          {isOpen ? '关闭' : '浏览'}
-        </button>
-      </div>
+    <>
+      <button
+        type="button"
+        className={`folder-picker-trigger ${isValueRoot ? 'is-root' : ''}`}
+        onClick={handleOpen}
+        disabled={disabled}
+      >
+        <span className="folder-picker-trigger-icon">📁</span>
+        <span className="folder-picker-trigger-path">{value || '/'}</span>
+        <span className="folder-picker-trigger-btn">更改</span>
+      </button>
 
       {isOpen && (
-        <div className="folder-picker-dialog">
-          <div className="folder-picker-header">
-            <button 
-              onClick={handleNavigateUp} 
-              disabled={currentPath === '/'}
-              className="small"
-            >
-              上级
-            </button>
-            <span className="current-path">{currentPath}</span>
-            <button onClick={handleSelectCurrent} className="primary small">
-              选择此目录
-            </button>
-          </div>
+        <div className="folder-picker-overlay" onClick={() => setIsOpen(false)}>
+          <div
+            className="folder-picker-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="folder-picker-titlebar">
+              <h3>选择上传目录</h3>
+              <button
+                type="button"
+                className="folder-picker-close"
+                onClick={() => setIsOpen(false)}
+                aria-label="关闭"
+              >
+                ✕
+              </button>
+            </div>
 
-          <div className="folder-picker-content">
-            {isLoading ? (
-              <div className="loading-folders">加载中...</div>
-            ) : error ? (
-              <div className="error-folders">{error}</div>
-            ) : folders.length === 0 ? (
-              <div className="empty-folders">此目录为空</div>
-            ) : (
-              <div className="folder-list">
-                {folders.map((folder) => (
-                  <div
-                    key={folder.name}
-                    className="folder-item"
-                    onClick={() => handleSelectFolder(folder.name)}
-                  >
-                    <span className="folder-icon">[DIR]</span>
-                    <span className="folder-name">{folder.name}</span>
-                  </div>
+            <div className="folder-picker-toolbar">
+              <div className="folder-picker-breadcrumb">
+                {segments.map((seg, idx) => (
+                  <span key={seg.path} className="breadcrumb-segment">
+                    {idx > 0 && <span className="breadcrumb-separator">/</span>}
+                    <button
+                      type="button"
+                      className={`breadcrumb-link ${seg.path === browsingPath ? 'current' : ''}`}
+                      onClick={() => handleNavigateTo(seg.path)}
+                      disabled={isLoading}
+                    >
+                      {seg.name}
+                    </button>
+                  </span>
                 ))}
               </div>
+              <div className="folder-picker-toolbar-actions">
+                <button
+                  type="button"
+                  className="small secondary"
+                  onClick={handleRetry}
+                  disabled={isLoading}
+                  title="刷新当前目录"
+                >
+                  刷新
+                </button>
+                <button
+                  type="button"
+                  className="small secondary"
+                  onClick={() => {
+                    setShowManualInput(!showManualInput);
+                    setManualError('');
+                    if (!showManualInput) {
+                      setTimeout(() => manualInputRef.current?.focus(), 50);
+                    }
+                  }}
+                  disabled={isLoading}
+                >
+                  {showManualInput ? '取消输入' : '输入路径'}
+                </button>
+              </div>
+            </div>
+
+            {showManualInput && (
+              <div className="folder-picker-manual">
+                <input
+                  ref={manualInputRef}
+                  type="text"
+                  value={manualDraft}
+                  onChange={(e) => setManualDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleManualVerify();
+                    }
+                  }}
+                  placeholder="/云盘/目标目录"
+                  disabled={manualVerifying}
+                />
+                <button
+                  type="button"
+                  className="primary small"
+                  onClick={handleManualVerify}
+                  disabled={manualVerifying || !manualDraft.trim()}
+                >
+                  {manualVerifying ? '验证中...' : '验证并跳转'}
+                </button>
+                {manualError && <div className="manual-error">{manualError}</div>}
+              </div>
             )}
+
+            <div className="folder-picker-search">
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="筛选当前目录..."
+                disabled={isLoading || !!error}
+              />
+            </div>
+
+            {recentPaths.length > 0 && browsingPath === '/' && !searchQuery && !showManualInput && (
+              <div className="folder-picker-recent">
+                <span className="recent-label">最近使用</span>
+                <div className="recent-list">
+                  {recentPaths.map((rp) => (
+                    <button
+                      key={rp}
+                      type="button"
+                      className="recent-item"
+                      onClick={() => handleNavigateTo(rp)}
+                      disabled={isLoading}
+                    >
+                      {rp}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="folder-picker-list">
+              {isLoading ? (
+                <div className="folder-picker-status">加载中...</div>
+              ) : error ? (
+                <div className="folder-picker-status error">
+                  <span>{error}</span>
+                  <button type="button" className="small" onClick={handleRetry}>重试</button>
+                </div>
+              ) : filteredFolders.length === 0 ? (
+                <div className="folder-picker-status">
+                  {searchQuery ? '没有匹配的子目录' : '此目录下没有子目录'}
+                </div>
+              ) : (
+                <div className="folder-list">
+                  {filteredFolders.map((folder) => (
+                    <div
+                      key={folder.name}
+                      className="folder-item"
+                      onClick={() => handleEnterFolder(folder.name)}
+                    >
+                      <span className="folder-icon">📁</span>
+                      <span className="folder-name">{folder.name}</span>
+                      <span className="folder-enter">›</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="folder-picker-footer">
+              <div className="folder-picker-current">
+                <span className="footer-label">当前目录：</span>
+                <code>{browsingPath}</code>
+              </div>
+              <div className="folder-picker-footer-actions">
+                <button type="button" className="secondary" onClick={() => setIsOpen(false)}>取消</button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={handleConfirm}
+                  disabled={!canConfirm}
+                  title={isRoot ? '根目录仅用于浏览，请选择具体子目录' : undefined}
+                >
+                  上传到此目录
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

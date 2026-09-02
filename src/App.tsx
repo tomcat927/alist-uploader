@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, Fragment } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback, Fragment } from 'react';
 import { useAppStore } from './store/appStore';
 import { open, ask } from '@tauri-apps/plugin-dialog';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
@@ -44,6 +44,25 @@ function App() {
   } = useAppStore();
 
   const [alistPath, setAlistPath] = useState('/');
+  const [recentPaths, setRecentPaths] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('alist-uploader:recent-paths');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addRecentPath = useCallback((path: string) => {
+    setRecentPaths(prev => {
+      const filtered = prev.filter(p => p !== path);
+      const next = [path, ...filtered].slice(0, 8);
+      try {
+        localStorage.setItem('alist-uploader:recent-paths', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'settings' | 'blocked'>('queue');
   const [configForm, setConfigForm] = useState<AppConfig>(DEFAULT_APP_CONFIG);
   const [blockedFiles, setBlockedFiles] = useState<BlockedFileRecord[]>([]);
@@ -659,21 +678,14 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
             <div className="queue-toolbar">
               <div className="target-path-panel">
                 <div className="target-path-header">
-                  <span className="target-step">先选择上传位置</span>
-                  <button
-                    type="button"
-                    className="secondary small"
-                    onClick={() => persistAlistPath('/')}
-                    disabled={alistPath === '/'}
-                  >
-                    使用根目录
-                  </button>
+                  <span className="target-step">上传位置</span>
                 </div>
-                <div className="upload-path-input">
-                  <label>目标目录:</label>
+                <div className="upload-path-bar">
                   <FolderPicker
                     value={alistPath}
                     onChange={persistAlistPath}
+                    recentPaths={recentPaths}
+                    onAddRecentPath={addRecentPath}
                   />
                 </div>
                 <div className="target-path-hint">
@@ -691,7 +703,11 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 )}
               </div>
               <div className="toolbar-actions">
-                <button onClick={handleSelectFiles}>
+                <button
+                  onClick={handleSelectFiles}
+                  disabled={isRootAlistPath(alistPath)}
+                  title={isRootAlistPath(alistPath) ? '请先选择具体目录作为上传目标' : undefined}
+                >
                   选择文件
                 </button>
                 {!isUploading ? (
@@ -1020,6 +1036,30 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   })}
                 />
                 <label htmlFor="autoLogin">启动时自动登录</label>
+              </div>
+              <div className="form-group">
+                <label>Alist 路径:</label>
+                <input
+                  type="text"
+                  value={configForm.alist.exe_path}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    alist: { ...configForm.alist, exe_path: e.target.value }
+                  })}
+                  placeholder="C:\\alist\\alist.exe（留空则不自动启动）"
+                />
+              </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="killAlistOnExit"
+                  checked={configForm.alist.kill_on_exit}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    alist: { ...configForm.alist, kill_on_exit: e.target.checked }
+                  })}
+                />
+                <label htmlFor="killAlistOnExit">退出时关闭 Alist</label>
               </div>
               <div className="toolbar-actions">
                 <button 
