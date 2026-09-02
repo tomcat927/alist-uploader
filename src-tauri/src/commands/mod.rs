@@ -409,8 +409,8 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
         return Ok(msg);
     }
 
-    log(&format!("尝试启动: {}", exe_path));
-    match Command::new(&exe_path).spawn() {
+    log(&format!("尝试启动: {} server", exe_path));
+    match Command::new(&exe_path).arg("server").spawn() {
         Ok(child) => {
             let pid = child.id();
             *crate::ALIST_CHILD_PID.lock().unwrap() = Some(pid);

@@ -141,8 +141,8 @@ pub fn run() {
                         return;
                     }
 
-                    append_log("startup.log", &format!("正在启动 Alist: {}", alist_exe));
-                    match Command::new(&alist_exe).spawn() {
+                    append_log("startup.log", &format!("正在启动 Alist: {} server", alist_exe));
+                    match Command::new(&alist_exe).arg("server").spawn() {
                         Ok(child) => {
                             let pid = child.id();
                             append_log("startup.log", &format!("Alist 进程已启动, pid={}", pid));
