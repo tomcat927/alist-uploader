@@ -142,7 +142,14 @@ pub fn run() {
                     }
 
                     append_log("startup.log", &format!("正在启动 Alist: {} server", alist_exe));
-                    match Command::new(&alist_exe).arg("server").spawn() {
+                    let alist_path = std::path::Path::new(&alist_exe);
+                    let working_dir = alist_path.parent();
+                    let mut cmd = Command::new(&alist_exe);
+                    cmd.arg("server");
+                    if let Some(dir) = working_dir {
+                        cmd.current_dir(dir);
+                    }
+                    match cmd.spawn() {
                         Ok(child) => {
                             let pid = child.id();
                             append_log("startup.log", &format!("Alist 进程已启动, pid={}", pid));

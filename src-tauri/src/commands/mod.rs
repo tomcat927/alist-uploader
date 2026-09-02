@@ -394,6 +394,9 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
         return Err(msg);
     }
 
+    // 使用 openlist.exe 所在目录作为工作目录，确保读到原有的 data/config.json
+    let working_dir = path.parent().map(|p| p.to_path_buf());
+
     // 先检测是否已在运行
     let already_running = reqwest::Client::new()
         .get(format!("{}/ping", base_url.trim_end_matches('/')))
@@ -409,8 +412,13 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
         return Ok(msg);
     }
 
-    log(&format!("尝试启动: {} server", exe_path));
-    match Command::new(&exe_path).arg("server").spawn() {
+    log(&format!("尝试启动: {} server (working_dir={:?})", exe_path, working_dir));
+    let mut cmd = Command::new(&exe_path);
+    cmd.arg("server");
+    if let Some(ref dir) = working_dir {
+        cmd.current_dir(dir);
+    }
+    match cmd.spawn() {
         Ok(child) => {
             let pid = child.id();
             *crate::ALIST_CHILD_PID.lock().unwrap() = Some(pid);
