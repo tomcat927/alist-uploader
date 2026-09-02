@@ -418,25 +418,28 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
             let msg = format!("Alist 进程已启动, pid={}", pid);
             log(&msg);
 
-            // 等 3 秒检测是否启动成功
-            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-            let healthy = reqwest::Client::new()
-                .get(format!("{}/ping", base_url.trim_end_matches('/')))
-                .timeout(std::time::Duration::from_secs(3))
-                .send()
-                .await
-                .map(|r| r.status().is_success())
-                .unwrap_or(false);
-
-            if healthy {
-                let msg2 = format!("Alist 启动成功，{} 已就绪 (pid={})", base_url, pid);
-                log(&msg2);
-                Ok(msg2)
-            } else {
-                let msg2 = format!("进程已启动 (pid={})，但 {} 3 秒内未就绪，可能需要更长时间", pid, base_url);
-                log(&msg2);
-                Ok(msg2)
+            // 轮询检测是否启动成功，最多等 30 秒
+            let mut healthy = false;
+            for i in 1..=30 {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                healthy = reqwest::Client::new()
+                    .get(format!("{}/ping", base_url.trim_end_matches('/')))
+                    .timeout(std::time::Duration::from_secs(3))
+                    .send()
+                    .await
+                    .map(|r| r.status().is_success())
+                    .unwrap_or(false);
+                if healthy {
+                    let msg2 = format!("Alist 启动成功，{} 已就绪 (pid={}, 等待 {}s)", base_url, pid, i);
+                    log(&msg2);
+                    return Ok(msg2);
+                }
+                log(&format!("等待 Alist 就绪: {}/s", i));
             }
+
+            let msg2 = format!("进程已启动 (pid={})，但 {} 30 秒内未就绪，请检查 Alist 配置或端口", pid, base_url);
+            log(&msg2);
+            Ok(msg2)
         }
         Err(e) => {
             let msg = format!("启动 Alist 失败: {}", e);

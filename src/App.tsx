@@ -73,6 +73,7 @@ function App() {
   const [speedLimitCustomMode, setSpeedLimitCustomMode] = useState(false);
   const [speedLimitCustomText, setSpeedLimitCustomText] = useState('');
   const [downloadingUpdate, setDownloadingUpdate] = useState(false);
+  const [testingAlist, setTestingAlist] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSizeText, setDownloadSizeText] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -1108,6 +1109,8 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
               <div className="form-group">
                 <button
                   onClick={async () => {
+                    if (testingAlist) return;
+                    setTestingAlist(true);
                     await writeClientLog('点击测试启动 Alist');
                     try {
                       const result = await invoke<string>('test_start_alist');
@@ -1117,12 +1120,14 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       const message = error instanceof Error ? error.message : String(error);
                       await writeClientLog(`测试启动 Alist 失败: ${message}`);
                       window.alert(`启动失败: ${message}`);
+                    } finally {
+                      setTestingAlist(false);
                     }
                   }}
                   className="secondary small"
-                  disabled={!configForm.alist.exe_path}
+                  disabled={!configForm.alist.exe_path || testingAlist}
                 >
-                  测试启动 Alist
+                  {testingAlist ? '正在启动...' : '测试启动 Alist'}
                 </button>
               </div>
               <div className="form-group checkbox-group">
