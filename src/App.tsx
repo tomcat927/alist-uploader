@@ -86,6 +86,7 @@ const [appVersion, setAppVersion] = useState('');
 const historyRetryTimerRef = useRef<Record<string, number>>({});
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
+  const startupUpdateCheckedRef = useRef(false);
   const alistPathRef = useRef('/');
   const savePathTimerRef = useRef<number | null>(null);
   const notifiedTaskIds = useRef<Set<string>>(new Set());
@@ -251,6 +252,61 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
     performAutoLogin();
   }, [config, configLoaded]);
+
+  // 启动时自动检查更新（可关闭，默认开启）
+  useEffect(() => {
+    if (!configLoaded || startupUpdateCheckedRef.current) return;
+    startupUpdateCheckedRef.current = true;
+    const normalizedConfig = normalizeAppConfig(config);
+    if (!normalizedConfig.upload.check_update_on_startup) return;
+
+    (async () => {
+      try {
+        const update = await check();
+        if (!update) return;
+        const confirmed = await ask(`发现新版本 ${update.version}，是否下载安装？`, {
+          title: '发现新版本',
+          kind: 'info',
+        });
+        if (!confirmed) return;
+
+        setDownloadingUpdate(true);
+        setDownloadProgress(0);
+        setDownloadSizeText('');
+        downloadTotalBytesRef.current = 0;
+        downloadReceivedBytesRef.current = 0;
+
+        await update.downloadAndInstall((event) => {
+          if (event.event === 'Started') {
+            downloadTotalBytesRef.current = event.data.contentLength || 0;
+            setDownloadProgress(0);
+            setDownloadSizeText(downloadTotalBytesRef.current > 0
+              ? `总大小 ${formatFileSize(downloadTotalBytesRef.current)}`
+              : '正在准备下载...');
+          } else if (event.event === 'Progress') {
+            downloadReceivedBytesRef.current += event.data.chunkLength;
+            const received = downloadReceivedBytesRef.current;
+            const total = downloadTotalBytesRef.current;
+            const percent = total > 0 ? Math.min(99, Math.round((received / total) * 100)) : 0;
+            setDownloadProgress(percent);
+            setDownloadSizeText(`已下载 ${formatFileSize(received)}${total > 0 ? ` / 共 ${formatFileSize(total)}` : ''}`);
+          } else if (event.event === 'Finished') {
+            setDownloadProgress(100);
+            setDownloadSizeText('下载完成，正在安装...');
+            writeClientLog('更新下载完成');
+          }
+        });
+
+        setDownloadingUpdate(false);
+        await writeClientLog('更新已安装，即将重启');
+        await relaunch();
+      } catch (error) {
+        setDownloadingUpdate(false);
+        const message = error instanceof Error ? error.message : String(error);
+        await writeClientLog(`启动检查更新失败: ${message}`);
+      }
+    })();
+  }, [configLoaded, config]);
 
   useEffect(() => {
     if (!isUploading) return;
@@ -1560,8 +1616,20 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
              )}
            </div>
            <div className="settings-version">
-             当前版本：{appVersion}
-           </div>
+              当前版本：{appVersion}
+            </div>
+            <div className="form-group checkbox-group">
+              <input
+                type="checkbox"
+                id="checkUpdateOnStartup"
+                checked={configForm.upload.check_update_on_startup}
+                onChange={(e) => setConfigForm({
+                  ...configForm,
+                  upload: { ...configForm.upload, check_update_on_startup: e.target.checked }
+                })}
+              />
+              <label htmlFor="checkUpdateOnStartup">启动时自动检查更新</label>
+            </div>
          </div>
        )}
       </main>

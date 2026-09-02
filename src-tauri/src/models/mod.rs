@@ -231,6 +231,9 @@ pub struct UploadConfig {
     /// 每轮上传任务数上限，0 表示不限
     #[serde(default)]
     pub max_tasks_per_run: u32,
+    /// 启动时自动检查更新（默认开启）
+    #[serde(default = "default_true")]
+    pub check_update_on_startup: bool,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
 }
@@ -270,6 +273,7 @@ impl Default for UploadConfig {
            shutdown_delay_minutes: 10,
            minimize_on_close: true,
             max_tasks_per_run: 0,
+            check_update_on_startup: true,
             schedule: Some(ScheduledUpload::default()),
             notification: None,
         }
