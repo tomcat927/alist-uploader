@@ -8,6 +8,12 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use std::process::Command;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 fn append_log(file_name: &str, message: &str) {
     use std::fs::{self, OpenOptions};
     use std::io::Write;
@@ -102,7 +108,8 @@ pub fn run() {
             let alist_exe = config.alist.exe_path.clone();
             let base_url = config.alist.base_url.clone();
             let kill_on_exit = config.alist.kill_on_exit;
-            append_log("startup.log", &format!("Alist 自动启动检查: exe_path='{}', kill_on_exit={}", alist_exe, kill_on_exit));
+            let run_in_background = config.alist.run_in_background;
+            append_log("startup.log", &format!("Alist 自动启动检查: exe_path='{}', kill_on_exit={}, run_in_background={}", alist_exe, kill_on_exit, run_in_background));
             drop(config);
 
             if !alist_exe.is_empty() && kill_on_exit {
@@ -148,6 +155,12 @@ pub fn run() {
                     cmd.arg("server");
                     if let Some(dir) = working_dir {
                         cmd.current_dir(dir);
+                    }
+                    if run_in_background {
+                        #[cfg(windows)]
+                        {
+                            cmd.creation_flags(CREATE_NO_WINDOW);
+                        }
                     }
                     match cmd.spawn() {
                         Ok(child) => {

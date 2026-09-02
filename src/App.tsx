@@ -1145,6 +1145,18 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 />
                 <label htmlFor="killAlistOnExit">退出时关闭 Alist</label>
               </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="runInBackground"
+                  checked={configForm.alist.run_in_background}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    alist: { ...configForm.alist, run_in_background: e.target.checked }
+                  })}
+                />
+                <label htmlFor="runInBackground">后台启动 Alist（隐藏控制台窗口）</label>
+              </div>
               <div className="toolbar-actions">
                 <button 
                   onClick={async () => {

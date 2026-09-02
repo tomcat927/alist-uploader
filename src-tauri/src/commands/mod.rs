@@ -377,6 +377,7 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
     let config = queue_manager.config.read().await;
     let exe_path = config.alist.exe_path.clone();
     let base_url = config.alist.base_url.clone();
+    let run_in_background = config.alist.run_in_background;
     drop(config);
 
     log(&format!("测试启动 Alist: exe_path='{}'", exe_path));
@@ -417,6 +418,14 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
     cmd.arg("server");
     if let Some(ref dir) = working_dir {
         cmd.current_dir(dir);
+    }
+    if run_in_background {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
     }
     match cmd.spawn() {
         Ok(child) => {

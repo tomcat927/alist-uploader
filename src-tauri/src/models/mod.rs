@@ -143,6 +143,9 @@ pub struct AlistConfig {
     /// 退出本软件时同时关闭 Alist 进程
     #[serde(default = "default_true")]
     pub kill_on_exit: bool,
+    /// 后台启动 Alist（隐藏控制台窗口），默认开启
+    #[serde(default = "default_true")]
+    pub run_in_background: bool,
 }
 
 impl Default for AlistConfig {
@@ -155,6 +158,7 @@ impl Default for AlistConfig {
             auto_login: true,
             exe_path: String::new(),
             kill_on_exit: true,
+            run_in_background: true,
         }
     }
 }

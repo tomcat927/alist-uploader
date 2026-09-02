@@ -43,6 +43,7 @@ export interface AlistConfig {
   auto_login: boolean;
   exe_path: string;
   kill_on_exit: boolean;
+  run_in_background: boolean;
 }
 
 export interface DirItem {
@@ -110,6 +111,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     auto_login: true,
     exe_path: '',
     kill_on_exit: true,
+    run_in_background: true,
   },
   upload: {
     concurrency: 1,
