@@ -273,6 +273,47 @@ impl AlistClient {
         }
     }
 
+    /// 设置 AList 服务端上传限速（控制 AList → 云盘的上传速度）
+    /// kb_per_sec: KB/s，-1 表示不限速
+    pub async fn set_server_upload_limit(&self, kb_per_sec: i64) -> Result<(), AlistError> {
+        let url = format!("{}/api/admin/setting/save", self.base_url.trim_end_matches('/'));
+        log(&format!("设置 AList 服务端上传限速: {} KB/s", if kb_per_sec < 0 { "不限速".to_string() } else { kb_per_sec.to_string() }));
+
+        let body = serde_json::json!([{
+            "key": "max_server_upload_speed",
+            "value": kb_per_sec.to_string()
+        }]);
+
+        let response = self.client
+            .post(&url)
+            .headers(self.headers())
+            .json(&body)
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await?;
+
+        let status = response.status();
+        let response_text = response.text().await.map_err(|e| {
+            log(&format!("读取限速设置响应失败: status={}, error={}", status, e));
+            AlistError::Api(format!("读取响应失败: {}", e))
+        })?;
+
+        log(&format!("限速设置响应: status={}, body_length={}", status, response_text.len()));
+
+        let resp: AlistResponse<serde_json::Value> = serde_json::from_str(&response_text).map_err(|e| {
+            log(&format!("解析限速设置响应失败: error={}, body={}", e, response_text));
+            AlistError::Api(format!("解析响应失败: {}", e))
+        })?;
+
+        if resp.code == 200 {
+            log("AList 服务端上传限速设置成功");
+            Ok(())
+        } else {
+            log(&format!("AList 服务端上传限速设置失败: code={}, message={}", resp.code, resp.message));
+            Err(AlistError::Api(format!("限速设置失败: {}", resp.message)))
+        }
+    }
+
     pub async fn upload_file(
         &self,
         file_path: &str,

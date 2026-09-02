@@ -39,7 +39,29 @@ impl UploadScheduler {
         self.queue_manager.set_uploading(true);
         let config = self.queue_manager.config.read().await;
         let rate_limiter = Arc::new(RateLimiter::new(config.upload.speed_limit));
+        let speed_limit_bytes = config.upload.speed_limit;
+        let alist_base_url = config.alist.base_url.clone();
+        let alist_token = config.alist.token.clone();
         drop(config);
+
+        // 通过 AList admin API 设置服务端上传限速（控制 AList → 云盘速度）
+        let alist_client_for_limit = AlistClient::new(alist_base_url, alist_token);
+        let limit_set = if speed_limit_bytes > 0 {
+            // bytes/s → KB/s
+            let kb_per_sec = (speed_limit_bytes / 1024) as i64;
+            match alist_client_for_limit.set_server_upload_limit(kb_per_sec).await {
+                Ok(()) => {
+                    log(&format!("已通过 AList API 设置服务端上传限速: {} KB/s", kb_per_sec));
+                    true
+                }
+                Err(e) => {
+                    log(&format!("设置 AList 服务端限速失败（限速将不生效）: {}", e));
+                    false
+                }
+            }
+        } else {
+            false
+        };
 
         let mut max_tasks_reached_logged = false;
 
@@ -104,6 +126,17 @@ impl UploadScheduler {
                 sleep(Duration::from_millis(1000)).await;
             }
        }
+
+       // 恢复 AList 服务端上传限速为不限速
+       if limit_set {
+           if let Err(e) = alist_client_for_limit.set_server_upload_limit(-1).await {
+               log(&format!("恢复 AList 服务端限速失败: {}", e));
+           } else {
+               log("已恢复 AList 服务端上传限速为不限速");
+           }
+       }
+
+       self.queue_manager.set_uploading(false);
 
        // 队列自然完成或达到任务上限时发送飞书通知（手动停止或失败停止不发）
        if !self.queue_manager.stop_after_current() {

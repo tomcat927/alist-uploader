@@ -1198,6 +1198,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     />
                   )}
                 </div>
+                <span className="field-hint">通过 AList API 控制 AList → 云盘的上传速度，0 表示不限速</span>
               </div>
               <div className="form-group checkbox-group">
                 <input
