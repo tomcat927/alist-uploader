@@ -32,6 +32,7 @@ interface AppState {
   setIsStopping: (value: boolean) => void;
   startHealthCheck: () => void;
   stopHealthCheck: () => void;
+  fastCheckHealth: () => Promise<void>;
   login: (baseUrl: string, username: string, password: string) => Promise<void>;
 }
 
@@ -181,10 +182,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     // 立即检查一次
     get().checkHealth();
     
-    // 然后每 30 秒检查一次
+    // 每 30 秒检查一次（常态）
     healthCheckInterval = setInterval(() => {
       get().checkHealth();
     }, 30000);
+  },
+
+  fastCheckHealth: async () => {
+    // 加速检测：每 3 秒检查一次，直到连通或达到 20 次（约 60 秒）
+    for (let i = 0; i < 20; i++) {
+      await get().checkHealth();
+      const state = get();
+      if (state.alistConnected) break;
+      await new Promise(resolve => setTimeout(resolve, 3000));
+    }
   },
 
   stopHealthCheck: () => {

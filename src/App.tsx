@@ -240,6 +240,11 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
         autoLoginRef.current = true;
         try {
           await writeClientLog(`自动登录: base_url=${normalizedConfig.alist.base_url}, username=${normalizedConfig.alist.username}`);
+          // 如果配置了 exe_path，先加速等待 openlist 就绪
+          if (normalizedConfig.alist.exe_path) {
+            await writeClientLog('检测到 exe_path 配置，加速等待 Alist 就绪');
+            await useAppStore.getState().fastCheckHealth();
+          }
           await login(normalizedConfig.alist.base_url, normalizedConfig.alist.username, normalizedConfig.alist.password);
           await writeClientLog('自动登录成功');
         } catch (error) {
@@ -1118,6 +1123,10 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       const result = await invoke<string>('test_start_alist');
                       await writeClientLog(`测试启动 Alist 结果: ${result}`);
                       window.alert(result);
+                      // 如果启动成功，触发加速健康检测
+                      if (result.includes('已就绪') || result.includes('已在运行')) {
+                        useAppStore.getState().fastCheckHealth();
+                      }
                     } catch (error) {
                       const message = error instanceof Error ? error.message : String(error);
                       await writeClientLog(`测试启动 Alist 失败: ${message}`);
