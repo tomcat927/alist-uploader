@@ -58,6 +58,21 @@ impl QueueManager {
             log(&format!("添加到上传队列被拦截: file_path={}, target_root=/, reason=根目录不是具体上传目录", file_path));
             return Err("请选择 Alist 中的具体目录后再添加文件，根目录 / 仅用于浏览存储入口".into());
         }
+
+        // 去重检查：队列中已存在相同 file_path + alist_path 的待上传任务则跳过
+        {
+            let queue = self.queue.read().await;
+            let already_exists = queue.tasks.iter().any(|t| {
+                t.status == TaskStatus::Pending
+                    && t.file.path == file_path
+                    && t.alist_path == target_root
+            });
+            if already_exists {
+                let msg = format!("文件已在队列中，跳过重复添加: file_path={}, target={}", file_path, target_root);
+                log(&msg);
+                return Ok(AddToQueueResult { tasks: vec![], warnings: vec!["文件已在队列中，已跳过".to_string()] });
+            }
+        }
         
         if crate::utils::fs::is_directory(&file_path) {
             let files = crate::utils::fs::collect_files_from_dir(&file_path)
@@ -119,6 +134,15 @@ impl QueueManager {
             log(&format!("添加单文件任务: file_path={}, file_name={}, size={}B, target_dir={}", file_path, task.file.name, size, target_root));
             
             let mut queue = self.queue.write().await;
+            let already_exists = queue.tasks.iter().any(|t| {
+                t.status == TaskStatus::Pending
+                    && t.file.path == file_path
+                    && t.alist_path == target_root
+            });
+            if already_exists {
+                log(&format!("文件已在队列中，跳过: file_path={}, target={}", file_path, target_root));
+                return Ok(AddToQueueResult { tasks: added_tasks, warnings });
+            }
             queue.tasks.push(task.clone());
             Storage::save_queue(&*queue)?;
             drop(queue);
@@ -185,6 +209,16 @@ impl QueueManager {
         task.file.relative_path = file_info.relative_path.clone();
 
         let mut queue = self.queue.write().await;
+        // 去重检查
+        let already_exists = queue.tasks.iter().any(|t| {
+            t.status == TaskStatus::Pending
+                && t.file.path == file_info.path
+                && t.alist_path == target_path
+        });
+        if already_exists {
+            log(&format!("文件已在队列中，跳过: file_path={}, target={}", file_info.path, target_path));
+            return Ok(task);
+        }
         queue.tasks.push(task.clone());
         Storage::save_queue(&*queue)?;
         drop(queue);
