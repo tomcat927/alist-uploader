@@ -102,6 +102,7 @@ pub fn run() {
             let alist_exe = config.alist.exe_path.clone();
             let base_url = config.alist.base_url.clone();
             let kill_on_exit = config.alist.kill_on_exit;
+            append_log("startup.log", &format!("Alist 自动启动检查: exe_path='{}', kill_on_exit={}", alist_exe, kill_on_exit));
             drop(config);
 
             if !alist_exe.is_empty() && kill_on_exit {

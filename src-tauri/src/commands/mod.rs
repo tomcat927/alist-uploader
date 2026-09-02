@@ -64,7 +64,7 @@ pub async fn get_config() -> Result<AppConfig, String> {
         log(&format!("读取磁盘配置失败: {}", e));
         e.to_string()
     })?;
-    log(&format!("读取磁盘配置: base_url={}, username={}, has_token={}, password_length={}, auto_login={}, last_alist_path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len(), config.alist.auto_login, config.upload.last_alist_path));
+    log(&format!("读取磁盘配置: base_url={}, username={}, has_token={}, password_length={}, auto_login={}, exe_path={}, kill_on_exit={}, last_alist_path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), config.alist.password.len(), config.alist.auto_login, config.alist.exe_path, config.alist.kill_on_exit, config.upload.last_alist_path));
     Ok(config)
 }
 
