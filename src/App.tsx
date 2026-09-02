@@ -1113,6 +1113,8 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     setTestingAlist(true);
                     await writeClientLog('点击测试启动 Alist');
                     try {
+                      // 先保存配置，确保 exe_path 已持久化
+                      await saveConfig(normalizeAppConfig(configForm));
                       const result = await invoke<string>('test_start_alist');
                       await writeClientLog(`测试启动 Alist 结果: ${result}`);
                       window.alert(result);
@@ -1129,6 +1131,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 >
                   {testingAlist ? '正在启动...' : '测试启动 Alist'}
                 </button>
+                <span className="field-hint">点击前会自动保存配置；启动后等待最多 30 秒检测就绪</span>
               </div>
               <div className="form-group checkbox-group">
                 <input
