@@ -111,15 +111,30 @@ pub fn run() {
             }
 
             if !alist_exe.is_empty() {
+                append_log("startup.log", &format!("exe_path 非空，进入自动启动逻辑: {}", alist_exe));
+                // 检查文件是否存在
+                let path_exists = std::path::Path::new(&alist_exe).exists();
+                append_log("startup.log", &format!("Alist 可执行文件是否存在: {}", path_exists));
+                if !path_exists {
+                    append_log("startup.log", &format!("警告: 文件 {} 不存在，无法启动", alist_exe));
+                }
+
                 tauri::async_runtime::spawn(async move {
                     // 先检测 Alist 是否已在运行
+                    append_log("startup.log", &format!("检测 Alist 是否已在运行: GET {}/ping", base_url.trim_end_matches('/')));
                     let already_running = reqwest::Client::new()
                         .get(format!("{}/ping", base_url.trim_end_matches('/')))
                         .timeout(std::time::Duration::from_secs(2))
                         .send()
                         .await
-                        .map(|r| r.status().is_success())
-                        .unwrap_or(false);
+                        .map(|r| {
+                            append_log("startup.log", &format!("ping 响应状态: {}", r.status()));
+                            r.status().is_success()
+                        })
+                        .unwrap_or_else(|e| {
+                            append_log("startup.log", &format!("ping 请求失败: {}", e));
+                            false
+                        });
 
                     if already_running {
                         append_log("startup.log", "Alist 已在运行，跳过自动启动");
@@ -129,14 +144,17 @@ pub fn run() {
                     append_log("startup.log", &format!("正在启动 Alist: {}", alist_exe));
                     match Command::new(&alist_exe).spawn() {
                         Ok(child) => {
-                            append_log("startup.log", &format!("Alist 进程已启动, pid={}", child.id()));
-                            *crate::ALIST_CHILD_PID.lock().unwrap() = Some(child.id());
+                            let pid = child.id();
+                            append_log("startup.log", &format!("Alist 进程已启动, pid={}", pid));
+                            *crate::ALIST_CHILD_PID.lock().unwrap() = Some(pid);
                         }
                         Err(e) => {
                             append_log("startup.log", &format!("启动 Alist 失败: {}", e));
                         }
                     }
                 });
+            } else {
+                append_log("startup.log", "exe_path 为空，跳过自动启动");
             }
 
             // 创建系统托盘图标，用于窗口最小化到托盘后恢复
@@ -230,6 +248,7 @@ pub fn run() {
            crate::commands::get_shutdown_state,
            crate::commands::cancel_shutdown,
            crate::commands::open_file_location,
+           crate::commands::test_start_alist,
        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

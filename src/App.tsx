@@ -1105,6 +1105,26 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   placeholder="C:\\alist\\alist.exe（留空则不自动启动）"
                 />
               </div>
+              <div className="form-group">
+                <button
+                  onClick={async () => {
+                    await writeClientLog('点击测试启动 Alist');
+                    try {
+                      const result = await invoke<string>('test_start_alist');
+                      await writeClientLog(`测试启动 Alist 结果: ${result}`);
+                      window.alert(result);
+                    } catch (error) {
+                      const message = error instanceof Error ? error.message : String(error);
+                      await writeClientLog(`测试启动 Alist 失败: ${message}`);
+                      window.alert(`启动失败: ${message}`);
+                    }
+                  }}
+                  className="secondary small"
+                  disabled={!configForm.alist.exe_path}
+                >
+                  测试启动 Alist
+                </button>
+              </div>
               <div className="form-group checkbox-group">
                 <input
                   type="checkbox"

@@ -369,3 +369,79 @@ pub async fn open_file_location(file_path: String) -> Result<(), String> {
     log(&format!("已打开文件所在目录: {}", file_path));
     Ok(())
 }
+
+#[tauri::command]
+pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<String, String> {
+    use std::process::Command;
+
+    let config = queue_manager.config.read().await;
+    let exe_path = config.alist.exe_path.clone();
+    let base_url = config.alist.base_url.clone();
+    drop(config);
+
+    log(&format!("测试启动 Alist: exe_path='{}'", exe_path));
+
+    if exe_path.is_empty() {
+        let msg = "Alist 路径未配置，请先在设置页填写";
+        log(msg);
+        return Err(msg.to_string());
+    }
+
+    let path = std::path::Path::new(&exe_path);
+    if !path.exists() {
+        let msg = format!("文件不存在: {}，请检查路径是否正确", exe_path);
+        log(&msg);
+        return Err(msg);
+    }
+
+    // 先检测是否已在运行
+    let already_running = reqwest::Client::new()
+        .get(format!("{}/ping", base_url.trim_end_matches('/')))
+        .timeout(std::time::Duration::from_secs(2))
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    if already_running {
+        let msg = format!("Alist 已在运行 ({} 返回 pong)", base_url);
+        log(&msg);
+        return Ok(msg);
+    }
+
+    log(&format!("尝试启动: {}", exe_path));
+    match Command::new(&exe_path).spawn() {
+        Ok(child) => {
+            let pid = child.id();
+            *crate::ALIST_CHILD_PID.lock().unwrap() = Some(pid);
+            *crate::ALIST_EXE_PATH.lock().unwrap() = Some(exe_path.clone());
+            let msg = format!("Alist 进程已启动, pid={}", pid);
+            log(&msg);
+
+            // 等 3 秒检测是否启动成功
+            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            let healthy = reqwest::Client::new()
+                .get(format!("{}/ping", base_url.trim_end_matches('/')))
+                .timeout(std::time::Duration::from_secs(3))
+                .send()
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false);
+
+            if healthy {
+                let msg2 = format!("Alist 启动成功，{} 已就绪 (pid={})", base_url, pid);
+                log(&msg2);
+                Ok(msg2)
+            } else {
+                let msg2 = format!("进程已启动 (pid={})，但 {} 3 秒内未就绪，可能需要更长时间", pid, base_url);
+                log(&msg2);
+                Ok(msg2)
+            }
+        }
+        Err(e) => {
+            let msg = format!("启动 Alist 失败: {}", e);
+            log(&msg);
+            Err(msg)
+        }
+    }
+}
