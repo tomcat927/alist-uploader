@@ -81,6 +81,7 @@ function App() {
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc');
+  const [historySearchText, setHistorySearchText] = useState('');
 const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
 const [appVersion, setAppVersion] = useState('');
   const [shutdownDeadline, setShutdownDeadline] = useState<string | null>(null);
@@ -678,13 +679,17 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   };
   const filteredHistory = useMemo(() => {
     let result = historyFilter === 'all' ? history : history.filter(t => t.status === historyFilter);
+    if (historySearchText.trim()) {
+      const q = historySearchText.trim().toLowerCase();
+      result = result.filter(t => t.file.name.toLowerCase().includes(q));
+    }
     result = [...result].sort((a, b) => {
       const ta = a.end_time ? new Date(a.end_time).getTime() : 0;
       const tb = b.end_time ? new Date(b.end_time).getTime() : 0;
       return historySortOrder === 'desc' ? tb - ta : ta - tb;
     });
     return result;
-  }, [history, historyFilter, historySortOrder]);
+  }, [history, historyFilter, historySortOrder, historySearchText]);
 
   const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
@@ -935,6 +940,13 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   失败 ({history.filter(t => t.status === 'failed').length})
                 </button>
               </div>
+              <input
+                type="text"
+                placeholder="搜索文件名..."
+                value={historySearchText}
+                onChange={(e) => setHistorySearchText(e.target.value)}
+                className="history-search-input"
+              />
               <button type="button" onClick={clearHistory} disabled={history.length === 0}>
                 清空历史
               </button>
