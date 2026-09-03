@@ -80,6 +80,7 @@ function App() {
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
+  const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc');
 const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
 const [appVersion, setAppVersion] = useState('');
   const [shutdownDeadline, setShutdownDeadline] = useState<string | null>(null);
@@ -676,9 +677,14 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     return new Date(isoString).toLocaleString('zh-CN');
   };
   const filteredHistory = useMemo(() => {
-    if (historyFilter === 'all') return history;
-    return history.filter(t => t.status === historyFilter);
-  }, [history, historyFilter]);
+    let result = historyFilter === 'all' ? history : history.filter(t => t.status === historyFilter);
+    result = [...result].sort((a, b) => {
+      const ta = a.end_time ? new Date(a.end_time).getTime() : 0;
+      const tb = b.end_time ? new Date(b.end_time).getTime() : 0;
+      return historySortOrder === 'desc' ? tb - ta : ta - tb;
+    });
+    return result;
+  }, [history, historyFilter, historySortOrder]);
 
   const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
@@ -947,7 +953,13 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       <th>大小</th>
                       <th>目标路径</th>
                       <th>状态</th>
-                      <th>完成时间</th>
+                      <th
+                        onClick={() => setHistorySortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                        style={{ cursor: 'pointer', userSelect: 'none' }}
+                        title="点击切换排序"
+                      >
+                        完成时间 {historySortOrder === 'desc' ? '▼' : '▲'}
+                      </th>
                       <th>耗时</th>
                       <th>操作</th>
                     </tr>
