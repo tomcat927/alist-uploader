@@ -42,10 +42,11 @@ impl UploadScheduler {
         let speed_limit_bytes = config.upload.speed_limit;
         let alist_base_url = config.alist.base_url.clone();
         let alist_token = config.alist.token.clone();
+        let use_proxy = config.alist.use_system_proxy;
         drop(config);
 
         // 通过 AList admin API 设置服务端上传限速（控制 AList → 云盘速度）
-        let alist_client_for_limit = AlistClient::new(alist_base_url, alist_token);
+        let alist_client_for_limit = AlistClient::new(alist_base_url, alist_token, use_proxy);
         let limit_set = if speed_limit_bytes > 0 {
             // bytes/s → KB/s
             let kb_per_sec = (speed_limit_bytes / 1024) as i64;
@@ -247,6 +248,7 @@ impl UploadScheduler {
         let alist_client = AlistClient::new(
             alist_config.base_url.clone(),
             alist_config.token.clone(),
+            alist_config.use_system_proxy,
         );
 
         log(&format!("调用 Alist API 上传: file_path={}, alist_path={}, as_task={}", task.file.path, task.alist_path, upload_config.as_task));

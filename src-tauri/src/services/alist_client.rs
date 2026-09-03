@@ -73,11 +73,15 @@ pub struct AlistClient {
 }
 
 impl AlistClient {
-    pub fn new(base_url: String, token: String) -> Self {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(3600))
-            .build()
-            .unwrap();
+    pub fn new(base_url: String, token: String, use_proxy: bool) -> Self {
+        let mut builder = Client::builder()
+            .timeout(Duration::from_secs(3600));
+
+        if !use_proxy {
+            builder = builder.no_proxy();
+        }
+
+        let client = builder.build().unwrap();
 
         Self {
             client,

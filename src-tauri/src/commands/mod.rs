@@ -131,7 +131,7 @@ pub async fn retry_upload(
 pub async fn test_alist_connection(config: AppConfig) -> Result<bool, String> {
     log(&format!("收到测试连接请求: base_url={}, username={}, has_token={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty()));
 
-    let client = AlistClient::new(config.alist.base_url, config.alist.token);
+    let client = AlistClient::new(config.alist.base_url, config.alist.token, config.alist.use_system_proxy);
 
     let result = client
         .test_connection()
@@ -165,7 +165,7 @@ pub async fn get_data_path() -> Result<String, String> {
 pub async fn check_health(config: AppConfig) -> Result<bool, String> {
     log(&format!("收到服务健康检查请求: base_url={}", config.alist.base_url));
 
-    let client = AlistClient::new(config.alist.base_url, config.alist.token);
+    let client = AlistClient::new(config.alist.base_url, config.alist.token, config.alist.use_system_proxy);
 
     let result = client
         .check_service_available()
@@ -202,7 +202,11 @@ pub async fn alist_login(
         return Err("密码不能为空".to_string());
     }
 
-    let client = AlistClient::new(normalized_base_url.clone(), String::new());
+    let config = queue_manager.config.read().await;
+    let use_proxy = config.alist.use_system_proxy;
+    drop(config);
+
+    let client = AlistClient::new(normalized_base_url.clone(), String::new(), use_proxy);
 
     let token = client
         .login(&username, &password)
@@ -286,7 +290,7 @@ pub async fn clear_blocked_files() -> Result<(), String> {
 #[tauri::command]
 pub async fn alist_list_dir(config: AppConfig, path: String) -> Result<String, String> {
     log(&format!("收到 Alist 目录列表请求: base_url={}, username={}, has_token={}, path={}", config.alist.base_url, config.alist.username, !config.alist.token.is_empty(), path));
-    let client = AlistClient::new(config.alist.base_url, config.alist.token);
+    let client = AlistClient::new(config.alist.base_url, config.alist.token, config.alist.use_system_proxy);
     
     let items = client
         .list_directory(&path)

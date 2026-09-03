@@ -146,6 +146,9 @@ pub struct AlistConfig {
     /// 后台启动 Alist（隐藏控制台窗口），默认开启
     #[serde(default = "default_true")]
     pub run_in_background: bool,
+    /// 是否使用系统代理（默认关闭，本地通信通常不需要代理）
+    #[serde(default)]
+    pub use_system_proxy: bool,
 }
 
 impl Default for AlistConfig {
@@ -159,6 +162,7 @@ impl Default for AlistConfig {
             exe_path: String::new(),
             kill_on_exit: true,
             run_in_background: true,
+            use_system_proxy: false,
         }
     }
 }

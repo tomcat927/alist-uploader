@@ -44,6 +44,7 @@ export interface AlistConfig {
   exe_path: string;
   kill_on_exit: boolean;
   run_in_background: boolean;
+  use_system_proxy: boolean;
 }
 
 export interface DirItem {
@@ -112,6 +113,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     exe_path: '',
     kill_on_exit: true,
     run_in_background: true,
+    use_system_proxy: false,
   },
   upload: {
     concurrency: 1,

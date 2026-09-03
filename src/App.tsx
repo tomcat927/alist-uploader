@@ -1166,6 +1166,18 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 />
                 <label htmlFor="runInBackground">后台启动 Alist（隐藏控制台窗口）</label>
               </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="useSystemProxy"
+                  checked={configForm.alist.use_system_proxy}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    alist: { ...configForm.alist, use_system_proxy: e.target.checked }
+                  })}
+                />
+                <label htmlFor="useSystemProxy">使用系统代理（远程 Alist 才需要，本地默认关闭）</label>
+              </div>
               <div className="toolbar-actions">
                 <button 
                   onClick={async () => {
