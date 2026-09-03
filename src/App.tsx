@@ -1001,6 +1001,14 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                               {historyRetryStatus[task.id] === 'queued' ? '已加入队列' : '重试'}
                             </button>
                           )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenFileLocation(task.file.path)}
+                            className="small"
+                            title="打开文件所在目录"
+                          >
+                            定位
+                          </button>
                         </td>
                       </tr>
                     ))}
