@@ -189,11 +189,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   fastCheckHealth: async () => {
-    // 加速检测：每 3 秒检查一次，直到连通或达到 20 次（约 60 秒）
-    for (let i = 0; i < 20; i++) {
+    // 加速检测：每 3 秒检查一次，直到服务就绪或达到 40 次（约 120 秒）
+    for (let i = 0; i < 40; i++) {
       await get().checkHealth();
       const state = get();
-      if (state.alistConnected) break;
+      if (state.alistServiceAvailable) break;
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
   },
