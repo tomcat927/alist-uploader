@@ -203,11 +203,6 @@ impl QueueManager {
         };
         log(&format!("添加文件夹内文件任务: file_path={}, file_name={}, relative_path={}, target_dir={}", file_info.path, file_info.name, file_info.relative_path.as_deref().unwrap_or(""), target_path));
         
-        let mut task = UploadTask::new(file_info.path.clone(), target_path);
-        task.file.size = file_info.size;
-        task.file.name = file_info.name.clone();
-        task.file.relative_path = file_info.relative_path.clone();
-
         let mut queue = self.queue.write().await;
         // 去重检查
         let already_exists = queue.tasks.iter().any(|t| {
@@ -217,8 +212,14 @@ impl QueueManager {
         });
         if already_exists {
             log(&format!("文件已在队列中，跳过: file_path={}, target={}", file_info.path, target_path));
-            return Ok(task);
+            return Ok(UploadTask::new(file_info.path.clone(), target_path));
         }
+
+        let mut task = UploadTask::new(file_info.path.clone(), target_path.clone());
+        task.file.size = file_info.size;
+        task.file.name = file_info.name.clone();
+        task.file.relative_path = file_info.relative_path.clone();
+
         queue.tasks.push(task.clone());
         Storage::save_queue(&*queue)?;
         drop(queue);
