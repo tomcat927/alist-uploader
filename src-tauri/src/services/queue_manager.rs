@@ -292,6 +292,8 @@ impl QueueManager {
 
     pub async fn add_to_history(&self, task: UploadTask) -> Result<(), Box<dyn std::error::Error>> {
         let mut history = self.history.write().await;
+        // 去重：相同文件路径 + 目标路径的旧记录替换为新记录
+        history.records.retain(|r| !(r.file.path == task.file.path && r.alist_path == task.alist_path));
         history.records.insert(0, task);
         
         // 按保留天数清理过期记录
