@@ -895,13 +895,27 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   失败 ({history.filter(t => t.status === 'failed').length})
                 </button>
               </div>
-              <input
-                type="text"
-                placeholder="搜索文件名..."
-                value={historySearchText}
-                onChange={(e) => setHistorySearchText(e.target.value)}
-                className="history-search-input"
-              />
+              <div className="history-search-wrapper">
+                <input
+                  type="text"
+                  placeholder="搜索文件名..."
+                  value={historySearchText}
+                  onChange={(e) => setHistorySearchText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape' && historySearchText) { e.preventDefault(); setHistorySearchText(''); } }}
+                  className="history-search-input"
+                />
+                {historySearchText && (
+                  <button
+                    type="button"
+                    className="history-search-clear"
+                    onClick={() => setHistorySearchText('')}
+                    title="清空搜索内容"
+                    aria-label="清空搜索内容"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
               <button type="button" onClick={clearHistory} disabled={history.length === 0}>
                 清空历史
               </button>

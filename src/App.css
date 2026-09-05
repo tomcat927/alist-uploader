@@ -237,6 +237,46 @@ body {
   background: var(--primary-hover);
 }
 
+.history-search-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.history-search-input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  min-width: 200px;
+}
+.history-search-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+.history-search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: var(--text-light, #999);
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+.history-search-clear:hover {
+  color: var(--text-color, #333);
+  background: rgba(0, 0, 0, 0.06);
+}
+
 .target-path-panel {
   flex: 1;
   min-width: 420px;
