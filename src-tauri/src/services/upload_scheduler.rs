@@ -225,6 +225,21 @@ impl UploadScheduler {
             queue_manager.processing_tasks.remove(&task.id);
             return;
         }
+
+        // 115 网盘限制：目录名称不能超过 20 个字符
+        let long_seg = task.alist_path
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .find(|s| s.chars().count() > 20);
+        if let Some(seg) = long_seg {
+            let error = format!("目录名称 \"{}\" 超过 20 个字符，115 网盘不允许，请修改目标路径", seg);
+            log(&format!("上传任务被目录名长度拦截: task_id={}, file={}, alist_path={}, segment={}", task.id, task.file.name, task.alist_path, seg));
+            task.mark_failed(error);
+            let _ = queue_manager.add_to_history(task.clone()).await;
+            let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
+            queue_manager.processing_tasks.remove(&task.id);
+            return;
+        }
         
         let config = queue_manager.config.read().await;
         let alist_config = config.alist.clone();
