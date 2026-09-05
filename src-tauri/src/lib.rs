@@ -228,8 +228,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .on_window_event(|window, event| {
+        .plugin(tauri_plugin_updater::Builder::new().build())        .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if let Some(qm) = window.try_state::<crate::services::queue_manager::QueueManager>() {
                     let config = qm.config.blocking_read();
@@ -269,6 +268,8 @@ pub fn run() {
            crate::commands::cancel_shutdown,
            crate::commands::open_file_location,
            crate::commands::test_start_alist,
+           crate::commands::check_update_no_proxy,
+           crate::commands::download_and_install_update_no_proxy,
        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

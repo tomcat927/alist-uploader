@@ -5,7 +5,6 @@ import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { invoke } from '@tauri-apps/api/core';
 import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
-import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { FolderPicker } from './components/FolderPicker';
 import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig, type BlockedFileRecord, type UploadTask } from './types';
@@ -93,8 +92,6 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   const alistPathRef = useRef('/');
   const savePathTimerRef = useRef<number | null>(null);
   const notifiedTaskIds = useRef<Set<string>>(new Set());
-  const downloadTotalBytesRef = useRef(0);
-  const downloadReceivedBytesRef = useRef(0);
 
   const normalizeAlistPath = (path: string) => {
     const trimmed = path.trim();
@@ -270,9 +267,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
     (async () => {
       try {
-        const update = await check();
-        if (!update) return;
-        const confirmed = await ask(`发现新版本 ${update.version}，是否下载安装？`, {
+        const version = await invoke<string | null>('check_update_no_proxy');
+        if (!version) return;
+        const confirmed = await ask(`发现新版本 ${version}，是否下载安装？`, {
           title: '发现新版本',
           kind: 'info',
         });
@@ -280,30 +277,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
         setDownloadingUpdate(true);
         setDownloadProgress(0);
-        setDownloadSizeText('');
-        downloadTotalBytesRef.current = 0;
-        downloadReceivedBytesRef.current = 0;
+        setDownloadSizeText('正在下载更新（不走系统代理）...');
 
-        await update.downloadAndInstall((event) => {
-          if (event.event === 'Started') {
-            downloadTotalBytesRef.current = event.data.contentLength || 0;
-            setDownloadProgress(0);
-            setDownloadSizeText(downloadTotalBytesRef.current > 0
-              ? `总大小 ${formatFileSize(downloadTotalBytesRef.current)}`
-              : '正在准备下载...');
-          } else if (event.event === 'Progress') {
-            downloadReceivedBytesRef.current += event.data.chunkLength;
-            const received = downloadReceivedBytesRef.current;
-            const total = downloadTotalBytesRef.current;
-            const percent = total > 0 ? Math.min(99, Math.round((received / total) * 100)) : 0;
-            setDownloadProgress(percent);
-            setDownloadSizeText(`已下载 ${formatFileSize(received)}${total > 0 ? ` / 共 ${formatFileSize(total)}` : ''}`);
-          } else if (event.event === 'Finished') {
-            setDownloadProgress(100);
-            setDownloadSizeText('下载完成，正在安装...');
-            writeClientLog('更新下载完成');
-          }
-        });
+        await invoke('download_and_install_update_no_proxy');
 
         setDownloadingUpdate(false);
         await writeClientLog('更新已安装，即将重启');
@@ -588,9 +564,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   const handleCheckUpdate = async () => {
     await writeClientLog('点击检查更新');
     try {
-      const update = await check();
-      if (update) {
-        const confirmed = await ask(`发现新版本 ${update.version}，是否下载安装？`, {
+      const version = await invoke<string | null>('check_update_no_proxy');
+      if (version) {
+        const confirmed = await ask(`发现新版本 ${version}，是否下载安装？`, {
           title: '发现新版本',
           kind: 'info',
         });
@@ -600,30 +576,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
         setDownloadingUpdate(true);
         setDownloadProgress(0);
-        setDownloadSizeText('');
-        downloadTotalBytesRef.current = 0;
-        downloadReceivedBytesRef.current = 0;
+        setDownloadSizeText('正在下载更新（不走系统代理）...');
 
-        await update.downloadAndInstall((event) => {
-          if (event.event === 'Started') {
-            downloadTotalBytesRef.current = event.data.contentLength || 0;
-            setDownloadProgress(0);
-            setDownloadSizeText(downloadTotalBytesRef.current > 0
-              ? `总大小 ${formatFileSize(downloadTotalBytesRef.current)}`
-              : '正在准备下载...');
-          } else if (event.event === 'Progress') {
-            downloadReceivedBytesRef.current += event.data.chunkLength;
-            const received = downloadReceivedBytesRef.current;
-            const total = downloadTotalBytesRef.current;
-            const percent = total > 0 ? Math.min(99, Math.round((received / total) * 100)) : 0;
-            setDownloadProgress(percent);
-            setDownloadSizeText(`已下载 ${formatFileSize(received)}${total > 0 ? ` / 共 ${formatFileSize(total)}` : ''}`);
-          } else if (event.event === 'Finished') {
-            setDownloadProgress(100);
-            setDownloadSizeText('下载完成，正在安装...');
-            writeClientLog('更新下载完成');
-          }
-        });
+        await invoke('download_and_install_update_no_proxy');
 
         setDownloadingUpdate(false);
         await writeClientLog('更新已安装，即将重启');

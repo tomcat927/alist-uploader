@@ -469,3 +469,71 @@ pub async fn test_start_alist(queue_manager: State<'_, QueueManager>) -> Result<
         }
     }
 }
+
+#[tauri::command]
+pub async fn check_update_no_proxy(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    log("检查更新（不走系统代理）");
+
+    let update = app
+        .updater_builder()
+        .no_proxy()
+        .build()
+        .map_err(|e| {
+            log(&format!("构建 updater 失败: {}", e));
+            e.to_string()
+        })?
+        .check()
+        .await
+        .map_err(|e| {
+            log(&format!("检查更新失败: {}", e));
+            e.to_string()
+        })?;
+
+    match update {
+        Some(update) => {
+            log(&format!("发现新版本: {} (当前: {})", update.version, update.current_version));
+            Ok(Some(update.version))
+        }
+        None => {
+            log("已是最新版本");
+            Ok(None)
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn download_and_install_update_no_proxy(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_updater::UpdaterExt;
+
+    log("下载并安装更新（不走系统代理）");
+
+    let update = app
+        .updater_builder()
+        .no_proxy()
+        .build()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| {
+            log(&format!("获取更新失败: {}", e));
+            e.to_string()
+        })?;
+
+    let Some(update) = update else {
+        return Err("已是最新版本".to_string());
+    };
+
+    log(&format!("下载更新: version={}", update.version));
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| {
+            log(&format!("安装更新失败: {}", e));
+            e.to_string()
+        })?;
+
+    log("更新已安装，即将重启");
+    app.restart();
+}
