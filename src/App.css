@@ -536,6 +536,12 @@ tr:last-child td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+td:has(> .task-file-name) {
+  max-width: 320px;
 }
 
 .task-detail-row td {
