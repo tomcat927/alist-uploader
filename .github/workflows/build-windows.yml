@@ -172,7 +172,6 @@ jobs:
 
           # Build the update manifest JSON
           $baseUrl = "https://github.com/$repo/releases/download/latest"
-          $proxyUrl = "https://gh-proxy.org/$baseUrl"
           $json = @{
             version = $version
             notes = $notes
@@ -180,11 +179,11 @@ jobs:
             platforms = @{
               "windows-x86_64" = @{
                 signature = $signature
-                url = "$proxyUrl/$exeName"
+                url = "$baseUrl/$exeName"
               }
               "windows-x86_64-nsis" = @{
                 signature = $signature
-                url = "$proxyUrl/$exeName"
+                url = "$baseUrl/$exeName"
               }
             }
           } | ConvertTo-Json -Compress
