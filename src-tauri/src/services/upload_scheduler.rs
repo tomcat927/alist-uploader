@@ -226,23 +226,23 @@ impl UploadScheduler {
             return;
         }
 
-        // 115 网盘限制：目录名和文件名不能超过 20 个字符
+        // 115 网盘限制：目录名和文件名不能超过 20 个字符（含 20 即违规）
         let long_seg = task.alist_path
             .split('/')
             .filter(|s| !s.is_empty())
-            .find(|s| s.chars().count() > 20);
+            .find(|s| s.chars().count() >= 20);
         if let Some(seg) = long_seg {
-            let error = format!("目录名称 \"{}\" 超过 20 个字符，115 网盘不允许，请修改目标路径", seg);
-            log(&format!("上传任务被目录名长度拦截: task_id={}, file={}, alist_path={}, segment={}", task.id, task.file.name, task.alist_path, seg));
+            let error = format!("目录名称 \"{}\" 达到或超过 20 个字符，115 网盘不允许，请修改目标路径", seg);
+            log(&format!("上传任务被目录名长度拦截: task_id={}, file={}, alist_path={}, segment={}, char_count={}", task.id, task.file.name, task.alist_path, seg, seg.chars().count()));
             task.mark_failed(error);
             let _ = queue_manager.add_to_history(task.clone()).await;
             let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
             queue_manager.processing_tasks.remove(&task.id);
             return;
         }
-        if task.file.name.chars().count() > 20 {
-            let error = format!("文件名 \"{}\" 超过 20 个字符，115 网盘不允许，请重命名后重试", task.file.name);
-            log(&format!("上传任务被文件名长度拦截: task_id={}, file={}, name_length={}", task.id, task.file.name, task.file.name.chars().count()));
+        if task.file.name.chars().count() >= 20 {
+            let error = format!("文件名 \"{}\" 达到或超过 20 个字符，115 网盘不允许，请重命名后重试", task.file.name);
+            log(&format!("上传任务被文件名长度拦截: task_id={}, file={}, char_count={}", task.id, task.file.name, task.file.name.chars().count()));
             task.mark_failed(error);
             let _ = queue_manager.add_to_history(task.clone()).await;
             let _ = queue_manager.remove_completed_from_queue(task.id.clone()).await;
