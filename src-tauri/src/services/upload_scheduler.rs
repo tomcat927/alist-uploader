@@ -304,6 +304,19 @@ impl UploadScheduler {
                     queue_manager.set_stop_after_current(true);
                 } else {
                     drop(config);
+                    // 阶梯等待：检测到 IO 错误（USB 闪断等）时阶梯延迟重试
+                    let is_io_error = e.contains("os error") || e.contains("IO 错误") || e.contains("系统找不到");
+                    if is_io_error {
+                        let delay_secs = match task.retry_count {
+                            0 => 5,
+                            1 => 10,
+                            2 => 20,
+                            3 => 30,
+                            _ => 60,
+                        };
+                        log(&format!("检测到 IO 错误，阶梯等待 {}s 后重试: file={}, retry={}/{}", delay_secs, task.file.name, task.retry_count + 1, max_retries));
+                        sleep(Duration::from_secs(delay_secs)).await;
+                    }
                     log(&format!("上传失败，准备重试: file={}, retry={}/{}", task.file.name, task.retry_count + 1, max_retries));
                     task.increment_retry();
                     let _ = queue_manager.update_task(task.id.clone(), task).await;
