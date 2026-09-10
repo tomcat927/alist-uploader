@@ -242,6 +242,9 @@ pub struct UploadConfig {
     /// 启动时自动检查更新（默认开启）
     #[serde(default = "default_true")]
     pub check_update_on_startup: bool,
+    /// 开机自启动（默认关闭）
+    #[serde(default)]
+    pub auto_start_on_boot: bool,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
 }
@@ -282,6 +285,7 @@ impl Default for UploadConfig {
            minimize_on_close: true,
             max_tasks_per_run: 0,
             check_update_on_startup: true,
+            auto_start_on_boot: false,
             schedule: Some(ScheduledUpload::default()),
             notification: None,
         }

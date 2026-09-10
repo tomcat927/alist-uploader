@@ -1691,8 +1691,29 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 })}
               />
               <label htmlFor="checkUpdateOnStartup">启动时自动检查更新</label>
-            </div>
-         </div>
+              </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="autoStartOnBoot"
+                  checked={configForm.upload.auto_start_on_boot}
+                  onChange={async (e) => {
+                    const enabled = e.target.checked;
+                    setConfigForm({ ...configForm, upload: { ...configForm.upload, auto_start_on_boot: enabled } });
+                    try {
+                      await invoke('set_autostart', { enabled });
+                      await writeClientLog(`开机自启${enabled ? '已开启' : '已关闭'}`);
+                    } catch (error) {
+                      const msg = error instanceof Error ? error.message : String(error);
+                      await writeClientLog(`设置开机自启失败: ${msg}`);
+                      window.alert(`设置开机自启失败: ${msg}`);
+                      setConfigForm({ ...configForm, upload: { ...configForm.upload, auto_start_on_boot: !enabled } });
+                    }
+                  }}
+                />
+                <label htmlFor="autoStartOnBoot">开机自启动（异常重启后自动恢复）</label>
+              </div>
+          </div>
        )}
       </main>
       {downloadingUpdate && (

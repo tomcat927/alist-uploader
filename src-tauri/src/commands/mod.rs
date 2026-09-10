@@ -537,3 +537,38 @@ pub async fn download_and_install_update_no_proxy(app: tauri::AppHandle) -> Resu
     log("更新已安装，即将重启");
     app.restart();
 }
+
+#[tauri::command]
+pub async fn set_autostart(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
+
+    let autostart_manager = app.autolaunch();
+    
+    if enabled {
+        if !autostart_manager.is_enabled().unwrap_or(false) {
+            autostart_manager.enable().map_err(|e| {
+                log(&format!("开启开机自启失败: {}", e));
+                e.to_string()
+            })?;
+            log("开机自启已开启");
+        }
+    } else {
+        if autostart_manager.is_enabled().unwrap_or(false) {
+            autostart_manager.disable().map_err(|e| {
+                log(&format!("关闭开机自启失败: {}", e));
+                e.to_string()
+            })?;
+            log("开机自启已关闭");
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn is_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    Ok(app.autolaunch().is_enabled().unwrap_or(false))
+}

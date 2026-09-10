@@ -682,6 +682,28 @@ impl UploadScheduler {
             .map(|_| ())
     }
 
+    /// 发送纯文本飞书通知
+    pub async fn send_text_notification(notification: &NotificationConfig, text: &str) {
+        for channel in &notification.channels {
+            match channel.as_str() {
+                "feishu" => {
+                    let payload = serde_json::json!({
+                        "msg_type": "text",
+                        "content": { "text": text }
+                    });
+                    if let Err(e) = Self::post_feishu_card(&notification.webhook_url, &payload).await {
+                        log::error!("发送飞书文本通知失败: {}", e);
+                    } else {
+                        log::info!("飞书文本通知发送成功");
+                    }
+                }
+                _ => {
+                    log::warn!("不支持的通知渠道: {}", channel);
+                }
+            }
+        }
+    }
+
    pub fn stop_scheduler(&self) {
        self.queue_manager.set_uploading(false);
    }

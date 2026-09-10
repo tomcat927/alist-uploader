@@ -177,6 +177,39 @@ pub fn run() {
                 append_log("startup.log", "exe_path 为空，跳过自动启动");
             }
 
+            // 恢复中断任务：上次异常退出时 uploading 状态的任务重置为 pending
+            {
+                let qm = app.state::<crate::services::queue_manager::QueueManager>();
+                let mut queue = qm.queue.write().await;
+                let mut recovered = 0;
+                for task in queue.tasks.iter_mut() {
+                    if task.status == crate::models::TaskStatus::Uploading {
+                        append_log("startup.log", &format!("恢复中断任务: file={}, alist_path={}", task.file.name, task.alist_path));
+                        task.status = crate::models::TaskStatus::Pending;
+                        task.progress = 0;
+                        task.speed = 0;
+                        recovered += 1;
+                    }
+                }
+                if recovered > 0 {
+                    append_log("startup.log", &format!("共恢复 {} 个中断任务", recovered));
+                    crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered));
+                    let _ = crate::utils::storage::Storage::save_queue(&*queue);
+
+                    // 发送飞书通知
+                    let config = qm.config.read().await;
+                    if let Some(notification) = &config.upload.notification {
+                        if notification.enabled && !notification.webhook_url.is_empty() {
+                            let msg = format!("系统重启恢复通知: 检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered);
+                            let qm_clone = qm_for_setup.clone_inner();
+                            tauri::async_runtime::spawn(async move {
+                                crate::services::upload_scheduler::UploadScheduler::send_text_notification(&notification, &msg).await;
+                            });
+                        }
+                    }
+                }
+            }
+
             // 创建系统托盘图标，用于窗口最小化到托盘后恢复
             let img = image::load_from_memory(include_bytes!("../icons/icon.png"))
                 .expect("加载托盘图标失败")
@@ -228,7 +261,9 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())        .on_window_event(|window, event| {
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
+        .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if let Some(qm) = window.try_state::<crate::services::queue_manager::QueueManager>() {
                     let config = qm.config.blocking_read();
@@ -270,6 +305,8 @@ pub fn run() {
            crate::commands::test_start_alist,
            crate::commands::check_update_no_proxy,
            crate::commands::download_and_install_update_no_proxy,
+           crate::commands::set_autostart,
+           crate::commands::is_autostart_enabled,
        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

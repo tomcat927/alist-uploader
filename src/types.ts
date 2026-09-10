@@ -74,6 +74,7 @@ export interface UploadConfig {
   max_retries: number;
   max_tasks_per_run: number;
   check_update_on_startup: boolean;
+  auto_start_on_boot: boolean;
   speed_limit: number;
   as_task: boolean;
   upload_method: string;
@@ -120,6 +121,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     max_retries: 5,
     max_tasks_per_run: 0,
     check_update_on_startup: true,
+    auto_start_on_boot: false,
     speed_limit: 0,
     as_task: true,
     upload_method: 'stream',
