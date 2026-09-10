@@ -644,6 +644,27 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     .filter(t => t.status === 'uploading')
     .reduce((sum, t) => sum + (t.speed || 0), 0);
 
+  const historyStats = useMemo(() => {
+    const total = history.length;
+    const completed = history.filter(t => t.status === 'completed');
+    const failed = history.filter(t => t.status === 'failed');
+    const successRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
+    const totalBytes = completed.reduce((sum, t) => sum + (t.file.size || 0), 0);
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonth = completed.filter(t => {
+      if (!t.end_time) return false;
+      return new Date(t.end_time) >= monthStart;
+    });
+    const monthBytes = thisMonth.reduce((sum, t) => sum + (t.file.size || 0), 0);
+
+    const totalDuration = completed.reduce((sum, t) => sum + (t.duration || 0), 0);
+    const avgSpeed = totalDuration > 0 ? totalBytes / totalDuration : 0;
+
+    return { total, completed: completed.length, failed: failed.length, successRate, totalBytes, monthBytes, avgSpeed };
+  }, [history]);
+
   const formatDateTime = (isoString?: string) => {
     if (!isoString) return '-';
     return new Date(isoString).toLocaleString('zh-CN');
@@ -1012,6 +1033,31 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 清空历史
               </button>
             </div>
+
+            {history.length > 0 && (
+              <div className="history-stats">
+                <div className="stat-card">
+                  <span className="stat-value">{historyStats.total}</span>
+                  <span className="stat-label">总上传数</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-value">{historyStats.successRate}%</span>
+                  <span className="stat-label">成功率</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-value">{formatFileSize(historyStats.totalBytes)}</span>
+                  <span className="stat-label">总上传量</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-value">{formatFileSize(historyStats.monthBytes)}</span>
+                  <span className="stat-label">本月上传量</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-value">{formatSpeed(historyStats.avgSpeed)}</span>
+                  <span className="stat-label">平均速度</span>
+                </div>
+              </div>
+            )}
 
             <div className="history-list">
               {filteredHistory.length === 0 ? (
