@@ -182,7 +182,7 @@ pub fn run() {
                 let qm_for_recover = qm_for_setup.clone_inner();
                 tauri::async_runtime::spawn(async move {
                     let mut queue = qm_for_recover.queue.write().await;
-                    let config = qm_for_recover.config.blocking_read();
+                    let config = qm_for_recover.config.read().await;
                     let alist_base_url = config.alist.base_url.clone();
                     let alist_token = config.alist.token.clone();
                     let use_proxy = config.alist.use_system_proxy;
