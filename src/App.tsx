@@ -79,6 +79,7 @@ function App() {
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState<'all' | 'pending' | 'uploading'>('all');
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [queueSearchText, setQueueSearchText] = useState('');
   const [blockedSearchText, setBlockedSearchText] = useState('');
   const [blockedSortOrder, setBlockedSortOrder] = useState<'desc' | 'asc'>('desc');
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -686,9 +687,13 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
   const filteredQueue = useMemo(() => {
-    if (queueFilter === 'all') return queue;
-    return queue.filter(t => t.status === queueFilter);
-  }, [queue, queueFilter]);
+    let result = queueFilter === 'all' ? queue : queue.filter(t => t.status === queueFilter);
+    if (queueSearchText.trim()) {
+      const q = queueSearchText.trim().toLowerCase();
+      result = result.filter(t => t.file.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [queue, queueFilter, queueSearchText]);
 
   const filteredBlockedFiles = useMemo(() => {
     let result = [...blockedFiles];
@@ -870,6 +875,24 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 >
                   上传中 ({queue.filter(t => t.status === 'uploading').length})
                 </button>
+                <input
+                  type="text"
+                  placeholder="搜索文件名..."
+                  value={queueSearchText}
+                  onChange={(e) => setQueueSearchText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape' && queueSearchText) { e.preventDefault(); setQueueSearchText(''); } }}
+                  className="history-search-input"
+                />
+                {queueSearchText && (
+                  <button
+                    type="button"
+                    className="history-search-clear"
+                    onClick={() => setQueueSearchText('')}
+                    title="清空搜索内容"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
               {isStopping && (
                 <div className="stopping-notice">
@@ -895,6 +918,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       <th>目标路径</th>
                       <th>状态</th>
                       <th>重试次数</th>
+                      <th>添加时间</th>
                       <th>操作</th>
                     </tr>
                   </thead>
@@ -933,6 +957,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                           </span>
                         </td>
                         <td>{task.retry_count}</td>
+                        <td>{formatDateTime(task.created_at)}</td>
                         <td>
                           {task.status === 'failed' && (
                             <button 
@@ -1124,7 +1149,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                         </tr>
                         {expandedHistoryTaskId === task.id && (
                           <tr className="task-detail-row">
-                            <td colSpan={7}>
+                          <td colSpan={8}>
                               <div className="task-path-detail">
                                 <div>
                                   <span className="task-path-label">本地路径</span>
