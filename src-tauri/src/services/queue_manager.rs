@@ -60,15 +60,30 @@ impl QueueManager {
         }
 
         // 去重检查：队列中已存在相同 file_path + alist_path 的待上传任务则跳过
+        // 若开启 block_duplicate_file_upload，则同一文件不同目标路径也拦截
         {
             let queue = self.queue.read().await;
+            let config = self.config.read().await;
+            let block_dup = config.upload.block_duplicate_file_upload;
+            drop(config);
             let already_exists = queue.tasks.iter().any(|t| {
-                t.status == TaskStatus::Pending
-                    && t.file.path == file_path
-                    && t.alist_path == target_root
+                if t.status != TaskStatus::Pending {
+                    return false;
+                }
+                if t.file.path == file_path && t.alist_path == target_root {
+                    return true;
+                }
+                if block_dup && t.file.path == file_path {
+                    return true;
+                }
+                false
             });
             if already_exists {
-                let msg = format!("文件已在队列中，跳过重复添加: file_path={}, target={}", file_path, target_root);
+                let msg = if block_dup {
+                    format!("文件已在队列中（可能目标路径不同），已跳过: file_path={}", file_path)
+                } else {
+                    format!("文件已在队列中，跳过重复添加: file_path={}, target={}", file_path, target_root)
+                };
                 log(&msg);
                 return Ok(AddToQueueResult { tasks: vec![], warnings: vec!["文件已在队列中，已跳过".to_string()] });
             }

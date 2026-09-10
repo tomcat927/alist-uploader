@@ -1527,6 +1527,18 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 />
 <label htmlFor="showProgress">显示上传进度</label>
               </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="blockDuplicateFileUpload"
+                  checked={configForm.upload.block_duplicate_file_upload}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, block_duplicate_file_upload: e.target.checked }
+                  })}
+                />
+                <label htmlFor="blockDuplicateFileUpload">拦截同一文件重复添加（不同目标路径也拦截）</label>
+              </div>
 
               <div className="form-group">
                 <label>上传失败后行为:</label>
