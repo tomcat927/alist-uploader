@@ -236,8 +236,9 @@ pub fn run() {
             let (width, height) = img.dimensions();
             let icon = Image::new_owned(img.into_raw(), width, height);
             let show = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+            let devtools = MenuItem::with_id(app, "devtools", "开发者工具", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let menu = Menu::with_items(app, &[&show, &devtools, &quit])?;
             TrayIconBuilder::with_id("main-tray")
                 .icon(icon)
                 .tooltip("alist-uploader")
@@ -248,6 +249,13 @@ pub fn run() {
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 let _ = window.show();
                                 let _ = window.set_focus();
+                            }
+                        }
+                        "devtools" => {
+                            if let Some(window) = app_handle.get_webview_window("main") {
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                                window.open_devtools();
                             }
                         }
                         "quit" => {
