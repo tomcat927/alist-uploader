@@ -225,6 +225,9 @@ pub struct UploadConfig {
     #[serde(default = "default_true")]
     pub warn_files_over_4gb: bool,
     pub file_exists_strategy: FileExistsStrategy,
+    /// 上传失败后行为："stop"（停止队列，默认）或 "skip"（跳过继续）
+    #[serde(default = "default_fail_action")]
+    pub fail_action: String,
     pub show_progress: bool,
    #[serde(default)]
    pub notify_on_complete: bool,
@@ -275,6 +278,10 @@ fn default_true() -> bool {
     true
 }
 
+fn default_fail_action() -> String {
+    "stop".to_string()
+}
+
 impl Default for UploadConfig {
     fn default() -> Self {
         Self {
@@ -287,6 +294,7 @@ impl Default for UploadConfig {
             block_files_over_5gb: true,
             warn_files_over_4gb: true,
             file_exists_strategy: FileExistsStrategy::default(),
+            fail_action: "stop".to_string(),
             show_progress: false,
            notify_on_complete: false,
            notify_feishu_on_queue_complete: false,

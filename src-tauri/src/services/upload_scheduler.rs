@@ -345,10 +345,17 @@ impl UploadScheduler {
                     }
                     drop(app_config);
                     
-                    // 停止整个队列
-                    log(&format!("停止整个上传队列: 文件上传失败: file={}", task.file.name));
-                    queue_manager.set_uploading(false);
-                    queue_manager.set_stop_after_current(true);
+                    // 根据 fail_action 决定是否停止整个队列
+                    let fail_action = config.upload.fail_action.clone();
+                    drop(config);
+                    if fail_action == "skip" {
+                        log(&format!("fail_action=skip，跳过失败文件继续上传: file={}", task.file.name));
+                    } else {
+                        // 停止整个队列
+                        log(&format!("停止整个上传队列: 文件上传失败: file={}", task.file.name));
+                        queue_manager.set_uploading(false);
+                        queue_manager.set_stop_after_current(true);
+                    }
                 } else {
                     drop(config);
                     // 阶梯等待：检测到 IO 错误（USB 闪断等）时阶梯延迟重试，总约 10 分钟

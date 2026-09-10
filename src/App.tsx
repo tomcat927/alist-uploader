@@ -165,6 +165,16 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 return;
               }
               await writeClientLog(`拖拽添加文件: count=${paths.length}, target_path=${targetPath}`);
+
+              // 拖拽时确认目标路径
+              const confirmMsg = paths.length === 1
+                ? `确认上传到以下目标路径？\n\n${targetPath}/`
+                : `确认上传 ${paths.length} 个项目到以下目标路径？\n\n${targetPath}/`;
+              const confirmed = await ask(confirmMsg, { title: '确认上传目标', kind: 'info' });
+              if (!confirmed) {
+                await writeClientLog('用户取消了拖拽上传');
+                return;
+              }
               for (const filePath of paths) {
                 try {
                   const result = await addToFileQueue(filePath, targetPath);
@@ -1363,6 +1373,20 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   })}
                 />
 <label htmlFor="showProgress">显示上传进度</label>
+              </div>
+
+              <div className="form-group">
+                <label>上传失败后行为:</label>
+                <select
+                  value={configForm.upload.fail_action || 'stop'}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, fail_action: e.target.value }
+                  })}
+                >
+                  <option value="stop">停止整个队列（默认）</option>
+                  <option value="skip">跳过失败文件，继续上传</option>
+                </select>
               </div>
 
               <div className="form-group checkbox-group">

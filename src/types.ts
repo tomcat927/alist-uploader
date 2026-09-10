@@ -86,6 +86,7 @@ export interface UploadConfig {
   file_exists_strategy: {
     strategy: string;
   };
+  fail_action: string;
   show_progress: boolean;
  notify_on_complete: boolean;
  notify_feishu_on_queue_complete: boolean;
@@ -135,6 +136,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     file_exists_strategy: {
       strategy: 'ask',
     },
+    fail_action: 'stop',
     show_progress: false,
    notify_on_complete: false,
    notify_feishu_on_queue_complete: false,
