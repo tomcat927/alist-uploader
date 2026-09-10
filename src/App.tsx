@@ -948,7 +948,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   <tbody>
                     {filteredHistory.map(task => (
                       <tr key={task.id}>
-                        <td><span className="task-file-name" title={task.file.name}>{task.file.name}</span></td>
+                        <td><span className="task-file-name" title={`本地: ${task.file.path}`}>{task.file.name}</span></td>
                         <td>{formatFileSize(task.file.size)}</td>
                         <td>{task.alist_path}</td>
                         <td>
