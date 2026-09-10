@@ -79,6 +79,8 @@ function App() {
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
   const [queueFilter, setQueueFilter] = useState<'all' | 'pending' | 'uploading'>('all');
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [blockedSearchText, setBlockedSearchText] = useState('');
+  const [blockedSortOrder, setBlockedSortOrder] = useState<'desc' | 'asc'>('desc');
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
@@ -697,6 +699,20 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     return <div className="loading">加载中...</div>;
   }
 
+  const filteredBlockedFiles = useMemo(() => {
+    let result = [...blockedFiles];
+    if (blockedSearchText.trim()) {
+      const q = blockedSearchText.trim().toLowerCase();
+      result = result.filter(r => r.file_name.toLowerCase().includes(q) || r.file_path.toLowerCase().includes(q));
+    }
+    result.sort((a, b) => {
+      const ta = new Date(a.blocked_at).getTime();
+      const tb = new Date(b.blocked_at).getTime();
+      return blockedSortOrder === 'desc' ? tb - ta : ta - tb;
+    });
+    return result;
+  }, [blockedFiles, blockedSearchText, blockedSortOrder]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -1088,12 +1104,19 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
           <div className="blocked-tab">
             <div className="tab-header">
               <h2>被拦截文件记录</h2>
+              <input
+                type="text"
+                placeholder="搜索文件名或路径..."
+                value={blockedSearchText}
+                onChange={(e) => setBlockedSearchText(e.target.value)}
+                className="history-search-input"
+              />
               <button onClick={clearBlockedFiles} className="danger" disabled={blockedFiles.length === 0}>
                 清空所有记录
               </button>
             </div>
-            {blockedFiles.length === 0 ? (
-              <p>暂无被拦截文件记录</p>
+            {filteredBlockedFiles.length === 0 ? (
+              <p>{blockedFiles.length === 0 ? '暂无被拦截文件记录' : '当前筛选下暂无记录'}</p>
             ) : (
               <table>
                 <thead>
@@ -1102,32 +1125,41 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     <th>文件路径</th>
                     <th>文件大小</th>
                     <th>原因</th>
-                    <th>时间</th>
+                    <th
+                      onClick={() => setBlockedSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                      style={{ cursor: 'pointer', userSelect: 'none' }}
+                      title="点击切换排序"
+                    >
+                      时间 {blockedSortOrder === 'desc' ? '▼' : '▲'}
+                    </th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {blockedFiles.map((record, index) => (
-                    <tr key={index}>
+                  {filteredBlockedFiles.map((record) => {
+                    const realIndex = blockedFiles.indexOf(record);
+                    return (
+                    <tr key={realIndex}>
                       <td>{record.file_name}</td>
                       <td title={record.file_path}>{record.file_path}</td>
                       <td>{formatFileSize(record.file_size)}</td>
                       <td>{record.reason}</td>
                       <td>{new Date(record.blocked_at).toLocaleString()}</td>
-                     <td>
-                       <button onClick={() => removeBlockedFile(index)} className="small danger">
-                         删除
-                       </button>
-                       <button
-                         onClick={() => handleOpenFileLocation(record.file_path)}
-                         className="small"
-                         title="打开文件所在目录"
-                       >
-                         定位
-                       </button>
-                     </td>
+                      <td>
+                        <button onClick={() => removeBlockedFile(realIndex)} className="small danger">
+                          删除
+                        </button>
+                        <button
+                          onClick={() => handleOpenFileLocation(record.file_path)}
+                          className="small"
+                          title="打开文件所在目录"
+                        >
+                          定位
+                        </button>
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}
