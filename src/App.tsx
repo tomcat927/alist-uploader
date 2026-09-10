@@ -1418,9 +1418,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       setSpeedLimitCustomMode(false);
                       setSpeedLimitCustomText('');
                       const bytesPerSec = val === 0 ? 0 : Math.round(val * 1000000);
-                      const newConfig = { ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } };
-                      setConfigForm(newConfig);
-                      saveConfig(newConfig);
+                      setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
                     }}
                   >
                     <option value={0}>不限速</option>
@@ -1441,9 +1439,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                         setSpeedLimitCustomText(e.target.value);
                         const v = parseFloat(e.target.value);
                         const bytesPerSec = Number.isFinite(v) && v > 0 ? Math.round(v * 1000000) : 0;
-                        const newConfig = { ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } };
-                        setConfigForm(newConfig);
-                        saveConfig(newConfig);
+                        setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
                       }}
                     />
                   )}
