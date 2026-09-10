@@ -76,7 +76,7 @@ fn kill_alist_on_exit() {
 pub fn run() {
     install_panic_hook();
     append_log("startup.log", "application startup begin");
-    crate::utils::log::log("application startup begin; build_marker=state-free-login-config-v2");
+    crate::utils::log::log(&format!("application startup begin; version={}, build_marker=state-free-login-config-v2", env!("CARGO_PKG_VERSION")));
 
     let queue_manager = match crate::services::queue_manager::QueueManager::new() {
         Ok(manager) => manager,
