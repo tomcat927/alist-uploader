@@ -43,6 +43,9 @@ impl UploadScheduler {
         let alist_base_url = config.alist.base_url.clone();
         let alist_token = config.alist.token.clone();
         let use_proxy = config.alist.use_system_proxy;
+        let progress_notify_enabled = config.upload.progress_notify_enabled;
+        let progress_notify_interval = config.upload.progress_notify_interval;
+        let progress_notification = config.upload.notification.clone().filter(|n| n.enabled && !n.webhook_url.is_empty());
         drop(config);
 
         // 通过 AList admin API 设置服务端上传限速（控制 AList → 云盘速度）
@@ -65,6 +68,45 @@ impl UploadScheduler {
         };
 
         let mut max_tasks_reached_logged = false;
+
+        // 上传进度通知定时器
+        let progress_qm = self.queue_manager.clone_inner();
+        let progress_notification_clone = progress_notification.clone();
+        let progress_handle = if progress_notify_enabled && progress_notification_clone.is_some() {
+            let notification = progress_notification_clone.unwrap();
+            Some(tokio::spawn(async move {
+                let interval_secs = (progress_notify_interval * 60) as u64;
+                loop {
+                    tokio::time::sleep(Duration::from_secs(interval_secs)).await;
+                    if !progress_qm.is_uploading() {
+                        break;
+                    }
+                    let queue = progress_qm.queue.read().await;
+                    let total = queue.tasks.len();
+                    let completed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
+                    let failed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
+                    let pending = queue.tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
+                    let uploading = queue.tasks.iter().filter(|t| t.status == TaskStatus::Uploading).count();
+                    let current_file = queue.tasks.iter()
+                        .find(|t| t.status == TaskStatus::Uploading)
+                        .map(|t| t.file.name.clone())
+                        .unwrap_or_default();
+                    drop(queue);
+
+                    let succeeded = progress_qm.tasks_uploaded_in_run();
+                    let failed_count = progress_qm.tasks_failed_in_run();
+                    let remaining = pending + uploading;
+                    let msg = format!(
+                        "上传进度通知\n已上传: {} 个\n失败: {} 个\n剩余: {} 个\n当前上传: {}",
+                        succeeded, failed_count, remaining,
+                        if current_file.is_empty() { "无".to_string() } else { current_file }
+                    );
+                    UploadScheduler::send_text_notification(&notification, &msg).await;
+                }
+            }))
+        } else {
+            None
+        };
 
         loop {
             if !self.queue_manager.is_uploading() {
@@ -126,6 +168,11 @@ impl UploadScheduler {
                 drop(config);
                 sleep(Duration::from_millis(1000)).await;
             }
+       }
+
+       // 停止进度通知定时器
+       if let Some(handle) = progress_handle {
+           handle.abort();
        }
 
        // 恢复 AList 服务端上传限速为不限速

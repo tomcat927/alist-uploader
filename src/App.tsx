@@ -1713,6 +1713,33 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 />
                 <label htmlFor="autoStartOnBoot">开机自启动（异常重启后自动恢复）</label>
               </div>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="progressNotifyEnabled"
+                  checked={configForm.upload.progress_notify_enabled}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    upload: { ...configForm.upload, progress_notify_enabled: e.target.checked }
+                  })}
+                />
+                <label htmlFor="progressNotifyEnabled">上传期间定时发送进度通知</label>
+              </div>
+              {configForm.upload.progress_notify_enabled && (
+                <div className="form-group">
+                  <label>通知间隔（分钟）:</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={configForm.upload.progress_notify_interval}
+                    onChange={(e) => setConfigForm({
+                      ...configForm,
+                      upload: { ...configForm.upload, progress_notify_interval: parseInt(e.target.value) || 30 }
+                    })}
+                  />
+                </div>
+              )}
           </div>
        )}
       </main>

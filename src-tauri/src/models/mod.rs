@@ -245,8 +245,18 @@ pub struct UploadConfig {
     /// 开机自启动（默认关闭）
     #[serde(default)]
     pub auto_start_on_boot: bool,
+    /// 上传期间定时发送进度通知（默认关闭）
+    #[serde(default)]
+    pub progress_notify_enabled: bool,
+    /// 进度通知间隔（分钟，默认 30）
+    #[serde(default = "default_progress_notify_interval")]
+    pub progress_notify_interval: u32,
     pub schedule: Option<ScheduledUpload>,
     pub notification: Option<NotificationConfig>,
+}
+
+fn default_progress_notify_interval() -> u32 {
+    30
 }
 
 fn default_upload_method() -> String {
@@ -286,6 +296,8 @@ impl Default for UploadConfig {
             max_tasks_per_run: 0,
             check_update_on_startup: true,
             auto_start_on_boot: false,
+            progress_notify_enabled: false,
+            progress_notify_interval: 30,
             schedule: Some(ScheduledUpload::default()),
             notification: None,
         }
