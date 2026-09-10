@@ -177,31 +177,51 @@ pub fn run() {
                 append_log("startup.log", "exe_path 为空，跳过自动启动");
             }
 
-            // 恢复中断任务：上次异常退出时 uploading 状态的任务重置为 pending
+            // 恢复中断任务：上次异常退出时 uploading 状态的任务检查是否已在 Alist 上完成
             {
                 let qm_for_recover = qm_for_setup.clone_inner();
                 tauri::async_runtime::spawn(async move {
                     let mut queue = qm_for_recover.queue.write().await;
+                    let config = qm_for_recover.config.blocking_read();
+                    let alist_base_url = config.alist.base_url.clone();
+                    let alist_token = config.alist.token.clone();
+                    let use_proxy = config.alist.use_system_proxy;
+                    drop(config);
+
+                    let alist_client = crate::services::alist_client::AlistClient::new(alist_base_url, alist_token, use_proxy);
                     let mut recovered = 0;
+                    let mut skipped = 0;
                     for task in queue.tasks.iter_mut() {
                         if task.status == crate::models::TaskStatus::Uploading {
                             append_log("startup.log", &format!("恢复中断任务: file={}, alist_path={}", task.file.name, task.alist_path));
-                            task.status = crate::models::TaskStatus::Pending;
-                            task.progress = 0;
-                            task.speed = 0;
-                            recovered += 1;
+
+                            // 检查文件是否已在 Alist 上存在
+                            let exists = alist_client.check_file_exists(&task.alist_path, &task.file.name).await.unwrap_or(false);
+                            if exists {
+                                append_log("startup.log", &format!("文件已在 Alist 上存在，跳过: file={}", task.file.name));
+                                task.status = crate::models::TaskStatus::Completed;
+                                task.progress = 100;
+                                task.speed = 0;
+                                skipped += 1;
+                            } else {
+                                task.status = crate::models::TaskStatus::Pending;
+                                task.progress = 0;
+                                task.speed = 0;
+                                recovered += 1;
+                            }
                         }
                     }
-                    if recovered > 0 {
-                        append_log("startup.log", &format!("共恢复 {} 个中断任务", recovered));
-                        crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered));
+                    let total = recovered + skipped;
+                    if total > 0 {
+                        append_log("startup.log", &format!("共恢复 {} 个中断任务（{} 个重新上传，{} 个已存在跳过）", total, recovered, skipped));
+                        crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务（{} 个重新上传，{} 个已存在跳过）", total, recovered, skipped));
                         let _ = crate::utils::storage::Storage::save_queue(&*queue);
 
                         // 发送飞书通知
                         let config = qm_for_recover.config.read().await;
                         if let Some(notification) = &config.upload.notification {
                             if notification.enabled && !notification.webhook_url.is_empty() {
-                                let msg = format!("系统重启恢复通知: 检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered);
+                                let msg = format!("系统重启恢复通知: 检测到 {} 个中断任务，{} 个重新上传，{} 个已在 Alist 上存在自动跳过", total, recovered, skipped);
                                 crate::services::upload_scheduler::UploadScheduler::send_text_notification(&notification, &msg).await;
                             }
                         }
@@ -262,6 +282,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--autostart"])))
+        .plugin(tauri_plugin_window_state::Builder::new().build())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if let Some(qm) = window.try_state::<crate::services::queue_manager::QueueManager>() {

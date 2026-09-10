@@ -77,6 +77,8 @@ function App() {
   const [downloadSizeText, setDownloadSizeText] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
+  const [queueFilter, setQueueFilter] = useState<'all' | 'pending' | 'uploading'>('all');
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
@@ -659,6 +661,38 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
   const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
+  const filteredQueue = useMemo(() => {
+    if (queueFilter === 'all') return queue;
+    return queue.filter(t => t.status === queueFilter);
+  }, [queue, queueFilter]);
+
+  const allFilteredSelected = filteredQueue.length > 0 && filteredQueue.every(t => selectedTaskIds.has(t.id));
+
+  const handleBatchDelete = async () => {
+    const ids = Array.from(selectedTaskIds);
+    for (const id of ids) {
+      await removeFromQueue(id);
+    }
+    setSelectedTaskIds(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedTaskIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (allFilteredSelected) {
+      setSelectedTaskIds(new Set());
+    } else {
+      setSelectedTaskIds(new Set(filteredQueue.map(t => t.id)));
+    }
+  };
+
   if (isLoading) {
     return <div className="loading">加载中...</div>;
   }
@@ -770,6 +804,34 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 <button onClick={clearQueue} disabled={queue.length === 0 || isUploading}>
                   清空队列
                 </button>
+                {selectedTaskIds.size > 0 && (
+                  <button onClick={handleBatchDelete} className="danger small">
+                    删除选中 ({selectedTaskIds.size})
+                  </button>
+                )}
+              </div>
+              <div className="queue-filter">
+                <button
+                  type="button"
+                  className={queueFilter === 'all' ? 'active' : ''}
+                  onClick={() => setQueueFilter('all')}
+                >
+                  全部 ({queue.length})
+                </button>
+                <button
+                  type="button"
+                  className={queueFilter === 'pending' ? 'active' : ''}
+                  onClick={() => setQueueFilter('pending')}
+                >
+                  等待中 ({queue.filter(t => t.status === 'pending').length})
+                </button>
+                <button
+                  type="button"
+                  className={queueFilter === 'uploading' ? 'active' : ''}
+                  onClick={() => setQueueFilter('uploading')}
+                >
+                  上传中 ({queue.filter(t => t.status === 'uploading').length})
+                </button>
               </div>
               {isStopping && (
                 <div className="stopping-notice">
@@ -789,6 +851,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 <table>
                   <thead>
                     <tr>
+                      <th><input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll} /></th>
                       <th>文件名</th>
                       <th>大小</th>
                       <th>目标路径</th>
@@ -798,9 +861,10 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     </tr>
                   </thead>
                   <tbody>
-                    {queue.map(task => (
+                    {filteredQueue.map(task => (
                       <Fragment key={task.id}>
                       <tr>
+                        <td><input type="checkbox" checked={selectedTaskIds.has(task.id)} onChange={() => toggleSelect(task.id)} /></td>
                         <td>
                           <button
                             type="button"
@@ -857,7 +921,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                      </tr>
                      {expandedTaskId === task.id && (
                         <tr className="task-detail-row">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             <div className="task-path-detail">
                               <div>
                                 <span className="task-path-label">本地路径</span>
@@ -1322,7 +1386,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       setSpeedLimitCustomMode(false);
                       setSpeedLimitCustomText('');
                       const bytesPerSec = val === 0 ? 0 : Math.round(val * 1000000);
-                      setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
+                      const newConfig = { ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } };
+                      setConfigForm(newConfig);
+                      saveConfig(newConfig);
                     }}
                   >
                     <option value={0}>不限速</option>
@@ -1343,7 +1409,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                         setSpeedLimitCustomText(e.target.value);
                         const v = parseFloat(e.target.value);
                         const bytesPerSec = Number.isFinite(v) && v > 0 ? Math.round(v * 1000000) : 0;
-                        setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
+                        const newConfig = { ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } };
+                        setConfigForm(newConfig);
+                        saveConfig(newConfig);
                       }}
                     />
                   )}
