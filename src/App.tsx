@@ -668,6 +668,20 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     return queue.filter(t => t.status === queueFilter);
   }, [queue, queueFilter]);
 
+  const filteredBlockedFiles = useMemo(() => {
+    let result = [...blockedFiles];
+    if (blockedSearchText.trim()) {
+      const q = blockedSearchText.trim().toLowerCase();
+      result = result.filter(r => r.file_name.toLowerCase().includes(q) || r.file_path.toLowerCase().includes(q));
+    }
+    result.sort((a, b) => {
+      const ta = new Date(a.blocked_at).getTime();
+      const tb = new Date(b.blocked_at).getTime();
+      return blockedSortOrder === 'desc' ? tb - ta : ta - tb;
+    });
+    return result;
+  }, [blockedFiles, blockedSearchText, blockedSortOrder]);
+
   const allFilteredSelected = filteredQueue.length > 0 && filteredQueue.every(t => selectedTaskIds.has(t.id));
 
   const handleBatchDelete = async () => {
@@ -698,20 +712,6 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   if (isLoading) {
     return <div className="loading">加载中...</div>;
   }
-
-  const filteredBlockedFiles = useMemo(() => {
-    let result = [...blockedFiles];
-    if (blockedSearchText.trim()) {
-      const q = blockedSearchText.trim().toLowerCase();
-      result = result.filter(r => r.file_name.toLowerCase().includes(q) || r.file_path.toLowerCase().includes(q));
-    }
-    result.sort((a, b) => {
-      const ta = new Date(a.blocked_at).getTime();
-      const tb = new Date(b.blocked_at).getTime();
-      return blockedSortOrder === 'desc' ? tb - ta : ta - tb;
-    });
-    return result;
-  }, [blockedFiles, blockedSearchText, blockedSortOrder]);
 
   return (
     <div className="app">
