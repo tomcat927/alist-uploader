@@ -96,6 +96,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
   const startupUpdateCheckedRef = useRef(false);
   const alistPathRef = useRef('/');
   const savePathTimerRef = useRef<number | null>(null);
+  const speedLimitSaveTimerRef = useRef<number | null>(null);
   const notifiedTaskIds = useRef<Set<string>>(new Set());
 
   const normalizeAlistPath = (path: string) => {
@@ -1418,7 +1419,12 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       setSpeedLimitCustomMode(false);
                       setSpeedLimitCustomText('');
                       const bytesPerSec = val === 0 ? 0 : Math.round(val * 1000000);
-                      setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
+                      const newConfig = { ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } };
+                      setConfigForm(newConfig);
+                      if (speedLimitSaveTimerRef.current) window.clearTimeout(speedLimitSaveTimerRef.current);
+                      speedLimitSaveTimerRef.current = window.setTimeout(() => {
+                        saveConfig(newConfig);
+                      }, 500);
                     }}
                   >
                     <option value={0}>不限速</option>
@@ -1439,7 +1445,12 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                         setSpeedLimitCustomText(e.target.value);
                         const v = parseFloat(e.target.value);
                         const bytesPerSec = Number.isFinite(v) && v > 0 ? Math.round(v * 1000000) : 0;
-                        setConfigForm({ ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } });
+                        const newConfig = { ...configForm, upload: { ...configForm.upload, speed_limit: bytesPerSec } };
+                        setConfigForm(newConfig);
+                        if (speedLimitSaveTimerRef.current) window.clearTimeout(speedLimitSaveTimerRef.current);
+                        speedLimitSaveTimerRef.current = window.setTimeout(() => {
+                          saveConfig(newConfig);
+                        }, 500);
                       }}
                     />
                   )}
