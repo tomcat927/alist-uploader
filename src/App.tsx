@@ -76,6 +76,7 @@ function App() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSizeText, setDownloadSizeText] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
   const [saveConfigStatus, setSaveConfigStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveConfigMessage, setSaveConfigMessage] = useState('');
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
@@ -947,39 +948,60 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   </thead>
                   <tbody>
                     {filteredHistory.map(task => (
-                      <tr key={task.id}>
-                        <td><span className="task-file-name" title={`本地: ${task.file.path}`}>{task.file.name}</span></td>
-                        <td>{formatFileSize(task.file.size)}</td>
-                        <td>{task.alist_path}</td>
-                        <td>
-                          <span className={`status-badge status-${task.status} ${task.error ? 'with-error' : ''}`}>
-                            {task.status === 'completed' ? '成功' : '失败'}
-                            {task.error && `: ${task.error}`}
-                          </span>
-                        </td>
-                        <td>{formatDateTime(task.end_time)}</td>
-                        <td>{task.duration ? formatDuration(task.duration) : '-'}</td>
-                        <td>
-                          {task.status === 'failed' && (
+                      <Fragment key={task.id}>
+                        <tr
+                          onClick={() => setExpandedHistoryTaskId(expandedHistoryTaskId === task.id ? null : task.id)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <td><span className="task-file-name" title={task.file.name}>{task.file.name}</span></td>
+                          <td>{formatFileSize(task.file.size)}</td>
+                          <td>{task.alist_path}</td>
+                          <td>
+                            <span className={`status-badge status-${task.status} ${task.error ? 'with-error' : ''}`}>
+                              {task.status === 'completed' ? '成功' : '失败'}
+                              {task.error && `: ${task.error}`}
+                            </span>
+                          </td>
+                          <td>{formatDateTime(task.end_time)}</td>
+                          <td>{task.duration ? formatDuration(task.duration) : '-'}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            {task.status === 'failed' && (
+                              <button
+                                type="button"
+                                onClick={() => handleHistoryRetry(task)}
+                                className={`small ${historyRetryStatus[task.id] === 'queued' ? 'queued' : ''}`}
+                                disabled={historyRetryStatus[task.id] === 'queued'}
+                              >
+                                {historyRetryStatus[task.id] === 'queued' ? '已加入队列' : '重试'}
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => handleHistoryRetry(task)}
-                              className={`small ${historyRetryStatus[task.id] === 'queued' ? 'queued' : ''}`}
-                              disabled={historyRetryStatus[task.id] === 'queued'}
+                              onClick={() => handleOpenFileLocation(task.file.path)}
+                              className="small"
+                              title="打开文件所在目录"
                             >
-                              {historyRetryStatus[task.id] === 'queued' ? '已加入队列' : '重试'}
+                              定位
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenFileLocation(task.file.path)}
-                            className="small"
-                            title="打开文件所在目录"
-                          >
-                            定位
-                          </button>
-                        </td>
-                      </tr>
+                          </td>
+                        </tr>
+                        {expandedHistoryTaskId === task.id && (
+                          <tr className="task-detail-row">
+                            <td colSpan={7}>
+                              <div className="task-path-detail">
+                                <div>
+                                  <span className="task-path-label">本地路径</span>
+                                  <code title={task.file.path}>{task.file.path}</code>
+                                </div>
+                                <div>
+                                  <span className="task-path-label">Alist 目标</span>
+                                  <code>{task.alist_path}</code>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
