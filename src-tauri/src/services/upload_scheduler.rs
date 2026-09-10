@@ -84,7 +84,7 @@ impl UploadScheduler {
                     let queue = progress_qm.queue.read().await;
                     let total = queue.tasks.len();
                     let completed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
-                    let failed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
+                    let _failed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
                     let pending = queue.tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
                     let uploading = queue.tasks.iter().filter(|t| t.status == TaskStatus::Uploading).count();
                     let current_file = queue.tasks.iter()

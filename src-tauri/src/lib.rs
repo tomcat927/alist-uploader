@@ -179,35 +179,34 @@ pub fn run() {
 
             // 恢复中断任务：上次异常退出时 uploading 状态的任务重置为 pending
             {
-                let qm = app.state::<crate::services::queue_manager::QueueManager>();
-                let mut queue = qm.queue.write().await;
-                let mut recovered = 0;
-                for task in queue.tasks.iter_mut() {
-                    if task.status == crate::models::TaskStatus::Uploading {
-                        append_log("startup.log", &format!("恢复中断任务: file={}, alist_path={}", task.file.name, task.alist_path));
-                        task.status = crate::models::TaskStatus::Pending;
-                        task.progress = 0;
-                        task.speed = 0;
-                        recovered += 1;
-                    }
-                }
-                if recovered > 0 {
-                    append_log("startup.log", &format!("共恢复 {} 个中断任务", recovered));
-                    crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered));
-                    let _ = crate::utils::storage::Storage::save_queue(&*queue);
-
-                    // 发送飞书通知
-                    let config = qm.config.read().await;
-                    if let Some(notification) = &config.upload.notification {
-                        if notification.enabled && !notification.webhook_url.is_empty() {
-                            let msg = format!("系统重启恢复通知: 检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered);
-                            let qm_clone = qm_for_setup.clone_inner();
-                            tauri::async_runtime::spawn(async move {
-                                crate::services::upload_scheduler::UploadScheduler::send_text_notification(&notification, &msg).await;
-                            });
+                let qm_for_recover = qm_for_setup.clone_inner();
+                tauri::async_runtime::spawn(async move {
+                    let mut queue = qm_for_recover.queue.write().await;
+                    let mut recovered = 0;
+                    for task in queue.tasks.iter_mut() {
+                        if task.status == crate::models::TaskStatus::Uploading {
+                            append_log("startup.log", &format!("恢复中断任务: file={}, alist_path={}", task.file.name, task.alist_path));
+                            task.status = crate::models::TaskStatus::Pending;
+                            task.progress = 0;
+                            task.speed = 0;
+                            recovered += 1;
                         }
                     }
-                }
+                    if recovered > 0 {
+                        append_log("startup.log", &format!("共恢复 {} 个中断任务", recovered));
+                        crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered));
+                        let _ = crate::utils::storage::Storage::save_queue(&*queue);
+
+                        // 发送飞书通知
+                        let config = qm_for_recover.config.read().await;
+                        if let Some(notification) = &config.upload.notification {
+                            if notification.enabled && !notification.webhook_url.is_empty() {
+                                let msg = format!("系统重启恢复通知: 检测到 {} 个上次中断的上传任务，已恢复为待上传状态", recovered);
+                                crate::services::upload_scheduler::UploadScheduler::send_text_notification(&notification, &msg).await;
+                            }
+                        }
+                    }
+                });
             }
 
             // 创建系统托盘图标，用于窗口最小化到托盘后恢复
