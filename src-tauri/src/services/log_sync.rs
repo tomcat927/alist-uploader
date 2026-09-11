@@ -9,7 +9,7 @@ use crate::utils::storage::Storage;
 
 const ALIST_SALT: &str = "https://github.com/alist-org/alist";
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Default)]
 struct LogSyncResponse<T> {
     pub code: i32,
     pub message: String,
@@ -17,7 +17,7 @@ struct LogSyncResponse<T> {
     pub data: Option<T>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Default)]
 struct LogSyncLoginResp {
     pub token: String,
 }
@@ -46,7 +46,7 @@ fn get_local_log_files_list() -> Vec<(PathBuf, String, u64, Option<String>)> {
         None => return files,
     };
 
-    let collect_entry = |entry: &std::path::Path, display_name: &str| {
+    let mut collect_entry = |entry: &std::path::Path, display_name: &str| {
         if let Ok(meta) = entry.metadata() {
             let size = meta.len();
             let modified = meta.modified().ok().map(|t| {
@@ -97,7 +97,7 @@ pub struct LogSyncClient {
 }
 
 impl LogSyncClient {
-    fn new(config: &LogSyncConfig) -> Self {
+    pub fn new(config: &LogSyncConfig) -> Self {
         let mut builder = Client::builder().timeout(Duration::from_secs(60));
         if !config.use_system_proxy {
             builder = builder.no_proxy();
