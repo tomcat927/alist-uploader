@@ -7,6 +7,7 @@ use tauri::image::Image;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use std::process::Command;
+use crate::utils::storage::Storage;
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -334,12 +335,17 @@ pub fn run() {
            crate::commands::download_and_install_update_no_proxy,
            crate::commands::set_autostart,
            crate::commands::is_autostart_enabled,
+           crate::commands::log_sync_login,
+           crate::commands::sync_logs,
+           crate::commands::get_local_log_files,
        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
     app.run(|_app_handle, event| {
         if let tauri::RunEvent::Exit = event {
+            let config = Storage::load_config().unwrap_or_default();
+            crate::services::log_sync::sync_on_exit_blocking(&config.log_sync);
             kill_alist_on_exit();
         }
     });

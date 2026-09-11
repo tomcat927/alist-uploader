@@ -370,10 +370,66 @@ impl Default for HistoryConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogSyncConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub base_url: String,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub token: String,
+    #[serde(default = "default_log_sync_target_path")]
+    pub target_path: String,
+    #[serde(default = "default_true")]
+    pub sync_on_exit: bool,
+    #[serde(default)]
+    pub use_system_proxy: bool,
+}
+
+fn default_log_sync_target_path() -> String {
+    "/本地磁盘/alist-uploader-logs".to_string()
+}
+
+impl Default for LogSyncConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: String::new(),
+            username: String::new(),
+            password: String::new(),
+            token: String::new(),
+            target_path: default_log_sync_target_path(),
+            sync_on_exit: true,
+            use_system_proxy: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalLogFileInfo {
+    pub name: String,
+    pub size: u64,
+    pub modified: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogSyncResult {
+    pub total: usize,
+    pub success: usize,
+    pub failed: usize,
+    pub details: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub alist: AlistConfig,
     pub upload: UploadConfig,
     pub history: HistoryConfig,
+    #[serde(default)]
+    pub log_sync: LogSyncConfig,
 }
 
 impl Default for AppConfig {
@@ -382,6 +438,7 @@ impl Default for AppConfig {
             alist: AlistConfig::default(),
             upload: UploadConfig::default(),
             history: HistoryConfig::default(),
+            log_sync: LogSyncConfig::default(),
         }
     }
 }

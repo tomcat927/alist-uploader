@@ -7,7 +7,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { FolderPicker } from './components/FolderPicker';
-import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig, type BlockedFileRecord, type UploadTask } from './types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AppConfig, type BlockedFileRecord, type UploadTask, type LocalLogFileInfo, type LogSyncResult } from './types';
 import './App.css';
 
 const FOUR_GB = 4 * 1024 * 1024 * 1024;
@@ -87,10 +87,16 @@ function App() {
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc');
   const [historySearchText, setHistorySearchText] = useState('');
-const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
-const [appVersion, setAppVersion] = useState('');
+  const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
+  const [appVersion, setAppVersion] = useState('');
   const [shutdownDeadline, setShutdownDeadline] = useState<string | null>(null);
   const [shutdownCountdown, setShutdownCountdown] = useState('');
+  const [logSyncStatus, setLogSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [logSyncMessage, setLogSyncMessage] = useState('');
+  const [logSyncLoginStatus, setLogSyncLoginStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [logSyncLoginMessage, setLogSyncLoginMessage] = useState('');
+  const [showLogSyncPassword, setShowLogSyncPassword] = useState(false);
+  const [localLogFiles, setLocalLogFiles] = useState<LocalLogFileInfo[]>([]);
 const historyRetryTimerRef = useRef<Record<string, number>>({});
   const autoLoginRef = useRef(false);
   const configInitializedRef = useRef(false);
@@ -153,6 +159,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     loadHistory();
     loadBlockedFiles();
     loadConfig();
+    invoke<LocalLogFileInfo[]>('get_local_log_files').then(setLocalLogFiles).catch(() => {});
     
     // 启动心跳检测
     startHealthCheck();
@@ -609,6 +616,73 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
       await writeClientLog(`检查更新失败: ${message}`);
       window.alert(`检查更新失败: ${message}`);
     }
+  };
+
+  const loadLocalLogFiles = async () => {
+    try {
+      const files = await invoke<LocalLogFileInfo[]>('get_local_log_files');
+      setLocalLogFiles(files);
+    } catch (error) {
+      console.error('Failed to load local log files:', error);
+    }
+  };
+
+  const handleLogSyncLogin = async () => {
+    const ls = configForm.log_sync;
+    if (!ls || !ls.base_url || !ls.username || !ls.password) {
+      setLogSyncLoginStatus('error');
+      setLogSyncLoginMessage('请填写地址、用户名和密码');
+      setTimeout(() => setLogSyncLoginStatus('idle'), 5000);
+      return;
+    }
+    await writeClientLog(`日志同步登录: base_url=${ls.base_url}, username=${ls.username}`);
+    try {
+      const token = await invoke<string>('log_sync_login', { config: ls });
+      setLogSyncLoginStatus('success');
+      setLogSyncLoginMessage(`登录成功，Token 已缓存`);
+      setConfigForm(prev => ({
+        ...prev,
+        log_sync: { ...prev.log_sync!, token },
+      }));
+      await writeClientLog('日志同步登录成功');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLogSyncLoginStatus('error');
+      setLogSyncLoginMessage(message);
+      await writeClientLog(`日志同步登录失败: ${message}`);
+    }
+    setTimeout(() => { setLogSyncLoginStatus('idle'); setLogSyncLoginMessage(''); }, 5000);
+  };
+
+  const handleSyncLogs = async () => {
+    const ls = configForm.log_sync;
+    if (!ls || !ls.base_url) {
+      setLogSyncStatus('error');
+      setLogSyncMessage('请先填写日志Alist服务地址');
+      setTimeout(() => setLogSyncStatus('idle'), 5000);
+      return;
+    }
+    setLogSyncStatus('syncing');
+    setLogSyncMessage('正在同步...');
+    await writeClientLog(`手动同步日志: base_url=${ls.base_url}, target_path=${ls.target_path}`);
+    try {
+      const result = await invoke<LogSyncResult>('sync_logs', { config: ls });
+      if (result.failed === 0) {
+        setLogSyncStatus('success');
+        setLogSyncMessage(`同步完成: ${result.success}/${result.total} 个文件成功`);
+      } else {
+        setLogSyncStatus('error');
+        setLogSyncMessage(`同步完成: 成功 ${result.success}/${result.total}，失败 ${result.failed}`);
+      }
+      await writeClientLog(`日志同步结果: total=${result.total}, success=${result.success}, failed=${result.failed}`);
+      await loadLocalLogFiles();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLogSyncStatus('error');
+      setLogSyncMessage(`同步失败: ${message}`);
+      await writeClientLog(`日志同步失败: ${message}`);
+    }
+    setTimeout(() => { setLogSyncStatus('idle'); setLogSyncMessage(''); }, 8000);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -1897,6 +1971,176 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   })}
                 />
               </div>
+            </div>
+
+            <div className="settings-section">
+              <h3>日志同步</h3>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="enableLogSync"
+                  checked={configForm.log_sync?.enabled || false}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    log_sync: { ...configForm.log_sync!, enabled: e.target.checked }
+                  })}
+                />
+                <label htmlFor="enableLogSync">启用日志同步到远程 Alist</label>
+              </div>
+
+              {(configForm.log_sync?.enabled || false) && (
+                <div className="log-sync-settings">
+                  <div className="form-group">
+                    <label>日志 Alist 服务地址:</label>
+                    <input
+                      type="text"
+                      value={configForm.log_sync?.base_url || ''}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        log_sync: { ...configForm.log_sync!, base_url: e.target.value }
+                      })}
+                      placeholder="http://119.91.136.173:5245"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>用户名:</label>
+                    <input
+                      type="text"
+                      value={configForm.log_sync?.username || ''}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        log_sync: { ...configForm.log_sync!, username: e.target.value }
+                      })}
+                      placeholder="日志 Alist 管理员用户名"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>密码:</label>
+                    <div className="password-input-wrapper">
+                      <input
+                        type={showLogSyncPassword ? "text" : "password"}
+                        value={configForm.log_sync?.password || ''}
+                        onChange={(e) => setConfigForm({
+                          ...configForm,
+                          log_sync: { ...configForm.log_sync!, password: e.target.value }
+                        })}
+                        placeholder="日志 Alist 密码"
+                      />
+                      <button
+                        type="button"
+                        className="password-toggle"
+                        onClick={() => setShowLogSyncPassword(!showLogSyncPassword)}
+                        aria-label={showLogSyncPassword ? '隐藏密码' : '显示密码'}
+                      >
+                        <span className={`eye-icon ${showLogSyncPassword ? 'visible' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>日志存放目录:</label>
+                    <input
+                      type="text"
+                      value={configForm.log_sync?.target_path || ''}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        log_sync: { ...configForm.log_sync!, target_path: e.target.value }
+                      })}
+                      placeholder="/本地磁盘/alist-uploader-logs"
+                    />
+                    <span className="field-hint">日志文件将上传到此目录（覆盖写）</span>
+                  </div>
+                  <div className="form-group checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="logSyncOnExit"
+                      checked={configForm.log_sync?.sync_on_exit || false}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        log_sync: { ...configForm.log_sync!, sync_on_exit: e.target.checked }
+                      })}
+                    />
+                    <label htmlFor="logSyncOnExit">退出程序时自动同步日志</label>
+                  </div>
+                  <div className="form-group checkbox-group">
+                    <input
+                      type="checkbox"
+                      id="logSyncUseProxy"
+                      checked={configForm.log_sync?.use_system_proxy || false}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        log_sync: { ...configForm.log_sync!, use_system_proxy: e.target.checked }
+                      })}
+                    />
+                    <label htmlFor="logSyncUseProxy">使用系统代理（远程 Alist 才需要）</label>
+                  </div>
+                  <div className="toolbar-actions">
+                    <button
+                      onClick={handleLogSyncLogin}
+                      className="secondary"
+                      disabled={!configForm.log_sync?.base_url || !configForm.log_sync?.username || !configForm.log_sync?.password}
+                    >
+                      登录测试
+                    </button>
+                    <button
+                      onClick={handleSyncLogs}
+                      className="secondary"
+                      disabled={logSyncStatus === 'syncing' || !configForm.log_sync?.base_url}
+                    >
+                      {logSyncStatus === 'syncing' ? '同步中...' : '立即同步日志'}
+                    </button>
+                    <button
+                      onClick={loadLocalLogFiles}
+                      className="secondary small"
+                    >
+                      刷新本地日志列表
+                    </button>
+                  </div>
+                  {logSyncLoginStatus === 'success' && (
+                    <span className="test-result success">{logSyncLoginMessage}</span>
+                  )}
+                  {logSyncLoginStatus === 'error' && (
+                    <span className="test-result error">{logSyncLoginMessage}</span>
+                  )}
+                  {logSyncStatus === 'success' && (
+                    <span className="test-result success">{logSyncMessage}</span>
+                  )}
+                  {logSyncStatus === 'error' && (
+                    <span className="test-result error">{logSyncMessage}</span>
+                  )}
+                  {configForm.log_sync?.token && (
+                    <div className="token-info">
+                      <span className="token-label">Token（自动缓存）:</span>
+                      <code>{configForm.log_sync.token.substring(0, 20)}...</code>
+                    </div>
+                  )}
+                  {localLogFiles.length > 0 && (
+                    <div className="local-log-files">
+                      <h4>本地日志文件</h4>
+                      <table className="log-files-table">
+                        <thead>
+                          <tr>
+                            <th>文件名</th>
+                            <th>大小</th>
+                            <th>修改时间</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {localLogFiles.map((f, i) => (
+                            <tr key={i}>
+                              <td>{f.name}</td>
+                              <td>{formatFileSize(f.size)}</td>
+                              <td>{f.modified ? formatDateTime(f.modified) : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="notification-notice">
+                    日志同步到独立的远程 Alist 实例，不影响上传用的 Alist。日志文件覆盖写，开发端可通过 Alist Web 界面或 API 拉取分析。
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="settings-actions">

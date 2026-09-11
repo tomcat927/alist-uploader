@@ -1361,3 +1361,48 @@ td:has(> .task-file-name) {
 .shutdown-cancel-btn:hover {
   opacity: 0.85;
 }
+
+.log-sync-settings {
+  margin-top: 0.5rem;
+}
+
+.log-sync-settings .field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-light);
+  margin-top: 0.25rem;
+}
+
+.local-log-files {
+  margin-top: 1rem;
+}
+
+.local-log-files h4 {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+
+.log-files-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.log-files-table th {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-light);
+  font-weight: 600;
+}
+
+.log-files-table td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.log-files-table tr:last-child td {
+  border-bottom: none;
+}
+

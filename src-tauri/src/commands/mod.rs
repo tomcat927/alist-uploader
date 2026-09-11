@@ -572,3 +572,51 @@ pub async fn is_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String>
     use tauri_plugin_autostart::ManagerExt;
     Ok(app.autolaunch().is_enabled().unwrap_or(false))
 }
+
+#[tauri::command]
+pub async fn log_sync_login(config: LogSyncConfig) -> Result<String, String> {
+    log(&format!("日志同步登录: base_url={}, username={}", config.base_url, config.username));
+
+    if config.base_url.is_empty() {
+        return Err("日志Alist服务地址不能为空".to_string());
+    }
+    if config.username.is_empty() {
+        return Err("用户名不能为空".to_string());
+    }
+    if config.password.is_empty() {
+        return Err("密码不能为空".to_string());
+    }
+
+    let client = crate::services::log_sync::LogSyncClient::new(&config);
+    let token = client
+        .login(&config.username, &config.password)
+        .await
+        .map_err(|e| {
+            log(&format!("日志同步登录失败: base_url={}, error={}", config.base_url, e));
+            e
+        })?;
+
+    let mut full_config = Storage::load_config().map_err(|e| e.to_string())?;
+    full_config.log_sync.token = token.clone();
+    full_config.log_sync.base_url = config.base_url.clone();
+    full_config.log_sync.username = config.username.clone();
+    full_config.log_sync.password = config.password.clone();
+    Storage::save_config(&full_config).map_err(|e| e.to_string())?;
+
+    log(&format!("日志同步登录成功，token已保存: base_url={}", config.base_url));
+    Ok(token)
+}
+
+#[tauri::command]
+pub async fn sync_logs(config: LogSyncConfig) -> Result<LogSyncResult, String> {
+    log(&format!("手动同步日志: base_url={}, target_path={}", config.base_url, config.target_path));
+
+    let result = crate::services::log_sync::sync_logs(&config).await;
+    log(&format!("日志同步结果: total={}, success={}, failed={}", result.total, result.success, result.failed));
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn get_local_log_files() -> Result<Vec<LocalLogFileInfo>, String> {
+    Ok(crate::services::log_sync::get_local_log_files())
+}

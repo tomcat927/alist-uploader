@@ -102,10 +102,35 @@ export interface HistoryConfig {
   retention_days: number;
 }
 
+export interface LogSyncConfig {
+  enabled: boolean;
+  base_url: string;
+  username: string;
+  password: string;
+  token: string;
+  target_path: string;
+  sync_on_exit: boolean;
+  use_system_proxy: boolean;
+}
+
+export interface LocalLogFileInfo {
+  name: string;
+  size: number;
+  modified?: string;
+}
+
+export interface LogSyncResult {
+  total: number;
+  success: number;
+  failed: number;
+  details: string[];
+}
+
 export interface AppConfig {
   alist: AlistConfig;
   upload: UploadConfig;
   history: HistoryConfig;
+  log_sync?: LogSyncConfig;
 }
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -161,6 +186,16 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   history: {
     retention_days: 30,
   },
+  log_sync: {
+    enabled: false,
+    base_url: '',
+    username: '',
+    password: '',
+    token: '',
+    target_path: '/本地磁盘/alist-uploader-logs',
+    sync_on_exit: true,
+    use_system_proxy: false,
+  },
 };
 
 export const normalizeAppConfig = (config?: Partial<AppConfig> | null): AppConfig => ({
@@ -188,4 +223,8 @@ export const normalizeAppConfig = (config?: Partial<AppConfig> | null): AppConfi
     ...DEFAULT_APP_CONFIG.history,
     ...config?.history,
   },
+  log_sync: {
+    ...DEFAULT_APP_CONFIG.log_sync,
+    ...config?.log_sync,
+  } as LogSyncConfig,
 });
