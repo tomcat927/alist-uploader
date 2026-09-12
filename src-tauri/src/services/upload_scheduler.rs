@@ -72,6 +72,7 @@ impl UploadScheduler {
         // 上传进度通知定时器
         let progress_qm = self.queue_manager.clone_inner();
         let progress_notification_clone = progress_notification.clone();
+        let progress_start = scheduler_start;
         let progress_handle = if progress_notify_enabled && progress_notification_clone.is_some() {
             let notification = progress_notification_clone.unwrap();
             Some(tokio::spawn(async move {
@@ -83,24 +84,58 @@ impl UploadScheduler {
                     }
                     let queue = progress_qm.queue.read().await;
                     let total = queue.tasks.len();
-                    let completed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Completed).count();
-                    let _failed = queue.tasks.iter().filter(|t| t.status == TaskStatus::Failed).count();
                     let pending = queue.tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
                     let uploading = queue.tasks.iter().filter(|t| t.status == TaskStatus::Uploading).count();
                     let current_file = queue.tasks.iter()
                         .find(|t| t.status == TaskStatus::Uploading)
                         .map(|t| t.file.name.clone())
                         .unwrap_or_default();
+                    let uploaded_bytes: u64 = queue.tasks.iter()
+                        .filter(|t| t.status == TaskStatus::Completed)
+                        .map(|t| t.file.size)
+                        .sum();
+                    let current_upload_size: u64 = queue.tasks.iter()
+                        .find(|t| t.status == TaskStatus::Uploading)
+                        .map(|t| t.file.size)
+                        .unwrap_or(0);
                     drop(queue);
 
                     let succeeded = progress_qm.tasks_uploaded_in_run();
                     let failed_count = progress_qm.tasks_failed_in_run();
                     let remaining = pending + uploading;
-                    let msg = format!(
-                        "上传进度通知\n已上传: {} 个\n失败: {} 个\n剩余: {} 个\n当前上传: {}",
-                        succeeded, failed_count, remaining,
-                        if current_file.is_empty() { "无".to_string() } else { current_file }
+                    let processed = succeeded + failed_count;
+                    let progress_pct = if total > 0 {
+                        (processed as f64 / total as f64 * 100.0).round() as u32
+                    } else { 0 };
+                    let now = chrono::Local::now();
+                    let elapsed = now - progress_start;
+                    let elapsed_str = format_duration(elapsed);
+                    let elapsed_secs = elapsed.num_seconds().max(1) as u64;
+                    let avg_speed_bps = uploaded_bytes / elapsed_secs;
+                    let now_str = now.format("%Y-%m-%d %H:%M:%S").to_string();
+
+                    let mut msg = format!(
+                        "📤 上传进度通知\n\
+                         时间: {}\n\
+                         进度: {}/{} ({}%)\n\
+                         已上传: {} 个 ({})\n\
+                         失败: {} 个\n\
+                         剩余: {} 个\n\
+                         已运行: {}\n\
+                         平均速度: {}/s",
+                        now_str,
+                        processed, total, progress_pct,
+                        succeeded, format_file_size(uploaded_bytes),
+                        failed_count,
+                        remaining,
+                        elapsed_str,
+                        format_file_size(avg_speed_bps)
                     );
+                    if !current_file.is_empty() {
+                        msg.push_str(&format!("\n当前上传: {} ({})", current_file, format_file_size(current_upload_size)));
+                    } else {
+                        msg.push_str("\n当前上传: 无");
+                    }
                     UploadScheduler::send_text_notification(&notification, &msg).await;
                 }
             }))
@@ -776,5 +811,16 @@ fn format_duration(duration: chrono::Duration) -> String {
     } else {
         format!("{}秒", seconds)
     }
+}
+
+fn format_file_size(bytes: u64) -> String {
+    let units = ["B", "KB", "MB", "GB", "TB"];
+    let mut size = bytes as f64;
+    let mut idx = 0;
+    while size >= 1024.0 && idx < units.len() - 1 {
+        size /= 1024.0;
+        idx += 1;
+    }
+    format!("{:.2} {}", size, units[idx])
 }
 
