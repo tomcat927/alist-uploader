@@ -83,17 +83,12 @@ impl UploadScheduler {
                         break;
                     }
                     let queue = progress_qm.queue.read().await;
-                    let total = queue.tasks.len();
                     let pending = queue.tasks.iter().filter(|t| t.status == TaskStatus::Pending).count();
                     let uploading = queue.tasks.iter().filter(|t| t.status == TaskStatus::Uploading).count();
                     let current_file = queue.tasks.iter()
                         .find(|t| t.status == TaskStatus::Uploading)
                         .map(|t| t.file.name.clone())
                         .unwrap_or_default();
-                    let uploaded_bytes: u64 = queue.tasks.iter()
-                        .filter(|t| t.status == TaskStatus::Completed)
-                        .map(|t| t.file.size)
-                        .sum();
                     let current_upload_size: u64 = queue.tasks.iter()
                         .find(|t| t.status == TaskStatus::Uploading)
                         .map(|t| t.file.size)
@@ -104,9 +99,20 @@ impl UploadScheduler {
                     let failed_count = progress_qm.tasks_failed_in_run();
                     let remaining = pending + uploading;
                     let processed = succeeded + failed_count;
+                    let total = processed + remaining;
                     let progress_pct = if total > 0 {
                         (processed as f64 / total as f64 * 100.0).round() as u32
                     } else { 0 };
+
+                    let uploaded_bytes: u64 = {
+                        let history = progress_qm.history.read().await;
+                        history.records.iter()
+                            .take(succeeded as usize)
+                            .filter(|t| t.status == TaskStatus::Completed)
+                            .map(|t| t.file.size)
+                            .sum()
+                    };
+
                     let now = chrono::Local::now();
                     let elapsed = now - progress_start;
                     let elapsed_str = format_duration(elapsed);
