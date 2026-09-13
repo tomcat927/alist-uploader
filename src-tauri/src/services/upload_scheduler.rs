@@ -97,7 +97,7 @@ impl UploadScheduler {
 
                     let succeeded = progress_qm.tasks_uploaded_in_run();
                     let failed_count = progress_qm.tasks_failed_in_run();
-                    let remaining = pending + uploading;
+                    let remaining = (pending + uploading) as u32;
                     let processed = succeeded + failed_count;
                     let total = processed + remaining;
                     let progress_pct = if total > 0 {
