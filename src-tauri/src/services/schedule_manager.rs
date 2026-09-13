@@ -4,7 +4,7 @@ use chrono::{Local, Timelike};
 use tokio::time::sleep;
 use crate::models::ScheduledUpload;
 use crate::services::queue_manager::QueueManager;
-use crate::services::upload_scheduler::UploadScheduler;
+use crate::services::upload_scheduler::{UploadScheduler, ScheduleStats};
 
 pub struct ScheduleManager {
     queue_manager: Arc<QueueManager>,
@@ -57,7 +57,44 @@ impl ScheduleManager {
         };
 
         if should_send {
-            UploadScheduler::send_schedule_notification(&notification, event_type).await;
+            let stats = self.collect_schedule_stats().await;
+            UploadScheduler::send_schedule_notification(
+                &notification,
+                event_type,
+                &schedule.start_time,
+                &schedule.end_time,
+                stats,
+            ).await;
+        }
+    }
+
+    async fn collect_schedule_stats(&self) -> ScheduleStats {
+        let queue = self.queue_manager.queue.read().await;
+        let pending_count = queue.tasks.iter().filter(|t| t.status == crate::models::TaskStatus::Pending).count();
+        let pending_bytes = queue.tasks.iter()
+            .filter(|t| t.status == crate::models::TaskStatus::Pending)
+            .map(|t| t.file.size)
+            .sum();
+        let uploading_count = queue.tasks.iter().filter(|t| t.status == crate::models::TaskStatus::Uploading).count();
+        drop(queue);
+
+        let uploaded_count = self.queue_manager.tasks_uploaded_in_run();
+        let failed_count = self.queue_manager.tasks_failed_in_run();
+        let history = self.queue_manager.history.read().await;
+        let uploaded_bytes = history.records.iter()
+            .take(uploaded_count as usize)
+            .filter(|t| t.status == crate::models::TaskStatus::Completed)
+            .map(|t| t.file.size)
+            .sum();
+        drop(history);
+
+        ScheduleStats {
+            pending_count,
+            pending_bytes,
+            uploaded_count,
+            uploaded_bytes,
+            failed_count,
+            uploading_count,
         }
     }
 

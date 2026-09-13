@@ -709,56 +709,52 @@ impl UploadScheduler {
        }
    }
 
-   pub async fn send_schedule_notification(
+    pub async fn send_schedule_notification(
         notification: &NotificationConfig,
         event_type: &str,
+        start_time: &str,
+        end_time: &str,
+        stats: ScheduleStats,
     ) {
-        let (title, message, template) = match event_type {
-            "start" => (
-                "定时上传开始",
-                "## 定时上传开始\n\n**状态**: 已到达定时上传的开始时间，调度器已启动\n\n_系统将自动扫描队列中的待上传文件并开始上传_",
-                "blue",
-            ),
-            "stop" => (
-                "定时上传结束",
-                "## 定时上传结束\n\n**状态**: 已到达定时上传的结束时间，不再启动新上传任务\n\n_如果当前正在上传，当前任务会继续完成_",
-                "yellow",
-            ),
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let msg = match event_type {
+            "start" => {
+                let mut msg = format!(
+                    "📤 定时上传开始\n\
+                     时间: {}\n\
+                     定时时段: {} ~ {}\n\
+                     队列待上传: {} 个 ({}",
+                    now, start_time, end_time, stats.pending_count,
+                    format_file_size(stats.pending_bytes)
+                );
+                msg.push(')');
+                msg
+            }
+            "stop" => {
+                let mut msg = format!(
+                    "⏹️ 定时上传结束\n\
+                     时间: {}\n\
+                     定时时段: {} ~ {}\n\
+                     本轮已上传: {} 个 ({})\n\
+                     本轮失败: {} 个",
+                    now, start_time, end_time,
+                    stats.uploaded_count, format_file_size(stats.uploaded_bytes),
+                    stats.failed_count
+                );
+                if stats.uploading_count > 0 {
+                    msg.push_str(&format!("\n当前仍在上传: {} 个任务，等待完成后停止", stats.uploading_count));
+                } else {
+                    msg.push_str("\n无正在上传的任务，已全部停止");
+                }
+                if stats.pending_count > 0 {
+                    msg.push_str(&format!("\n剩余未上传: {} 个", stats.pending_count));
+                }
+                msg
+            }
             _ => return,
         };
-        let payload = serde_json::json!({
-            "msg_type": "interactive",
-            "card": {
-                "header": {
-                    "title": {
-                        "tag": "plain_text",
-                        "content": title,
-                    },
-                    "template": template,
-                },
-                "elements": [{
-                    "tag": "div",
-                    "text": {
-                        "tag": "lark_md",
-                        "content": message,
-                    }
-                }]
-            }
-        });
-        for channel in &notification.channels {
-            match channel.as_str() {
-                "feishu" => {
-                    if let Err(e) = Self::post_feishu_card(&notification.webhook_url, &payload).await {
-                        log::error!("发送定时上传通知失败: {}, event_type={}", e, event_type);
-                    } else {
-                        log::info!("定时上传通知发送成功: event_type={}", event_type);
-                    }
-                }
-                _ => {
-                    log::warn!("不支持的通知渠道: {}", channel);
-                }
-            }
-        }
+
+        UploadScheduler::send_text_notification(notification, &msg).await;
     }
 
     async fn post_feishu_card(webhook_url: &str, payload: &serde_json::Value) -> Result<(), reqwest::Error> {
@@ -822,5 +818,14 @@ fn format_file_size(bytes: u64) -> String {
         idx += 1;
     }
     format!("{:.2} {}", size, units[idx])
+}
+
+pub struct ScheduleStats {
+    pub pending_count: usize,
+    pub pending_bytes: u64,
+    pub uploaded_count: u32,
+    pub uploaded_bytes: u64,
+    pub failed_count: u32,
+    pub uploading_count: usize,
 }
 
