@@ -44,6 +44,35 @@ fn install_panic_hook() {
     }));
 }
 
+/// 运行标记文件路径：正常退出时删除，异常终止时残留
+fn running_marker_path() -> Option<std::path::PathBuf> {
+    let mut dir = dirs::data_local_dir()?;
+    dir.push("alist-uploader");
+    Some(dir.join("running.marker"))
+}
+
+/// 启动时写入运行标记
+fn write_running_marker() {
+    if let Some(path) = running_marker_path() {
+        let ts = chrono::Local::now().to_rfc3339();
+        let _ = std::fs::write(&path, ts);
+    }
+}
+
+/// 正常退出时删除运行标记
+fn clear_running_marker() {
+    if let Some(path) = running_marker_path() {
+        let _ = std::fs::remove_file(&path);
+    }
+}
+
+/// 检测上次是否异常终止（marker 残留即上次未走正常退出）
+fn detect_abnormal_exit() -> bool {
+    running_marker_path()
+        .map(|p| p.exists())
+        .unwrap_or(false)
+}
+
 // 全局存储 Alist 可执行文件路径和子进程 PID，供退出时关闭使用
 pub static ALIST_EXE_PATH: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 pub static ALIST_CHILD_PID: std::sync::Mutex<Option<u32>> = std::sync::Mutex::new(None);
@@ -79,6 +108,14 @@ pub fn run() {
     append_log("startup.log", "application startup begin");
     crate::utils::log::log(&format!("application startup begin; version={}, build_marker=state-free-login-config-v2", env!("CARGO_PKG_VERSION")));
 
+    // 异常退出检测：marker 残留说明上次未走正常退出流程（断电/强杀/崩溃）
+    let last_exit_abnormal = detect_abnormal_exit();
+    if last_exit_abnormal {
+        append_log("startup.log", "检测到上次异常退出（运行标记残留）");
+        crate::utils::log::log("检测到上次异常退出: 运行标记残留，可能为断电/强杀/崩溃");
+    }
+    write_running_marker();
+
     let queue_manager = match crate::services::queue_manager::QueueManager::new() {
         Ok(manager) => manager,
         Err(error) => {
@@ -87,6 +124,7 @@ pub fn run() {
         }
     };
     let qm_for_setup = queue_manager.clone_inner();
+    let abnormal_for_setup = last_exit_abnormal;
 
     append_log("startup.log", "queue manager initialized");
     crate::utils::log::log("queue manager initialized; managed_type=QueueManager");
@@ -181,6 +219,7 @@ pub fn run() {
             // 恢复中断任务：上次异常退出时 uploading 状态的任务检查是否已在 Alist 上完成
             {
                 let qm_for_recover = qm_for_setup.clone_inner();
+                let was_abnormal = abnormal_for_setup;
                 tauri::async_runtime::spawn(async move {
                     let mut queue = qm_for_recover.queue.write().await;
                     let config = qm_for_recover.config.read().await;
@@ -217,8 +256,28 @@ pub fn run() {
                         append_log("startup.log", &format!("共恢复 {} 个中断任务（{} 个重新上传，{} 个已存在跳过）", total, recovered, skipped));
                         crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务（{} 个重新上传，{} 个已存在跳过）", total, recovered, skipped));
                         let _ = crate::utils::storage::Storage::save_queue(&*queue);
+                    }
+                    drop(queue);
 
-                        // 发送飞书通知
+                    // 异常退出检测：marker 残留说明上次是断电/强杀/崩溃
+                    if was_abnormal {
+                        let reason = if total > 0 {
+                            format!("⚠️ 程序异常退出告警\n上次运行被强制终止（断电/蓝屏/强杀），中断了 {} 个上传任务\n已自动恢复: {} 个重新上传，{} 个已存在跳过\n建议检查电脑供电稳定性",
+                                total, recovered, skipped)
+                        } else {
+                            "⚠️ 程序异常退出告警\n上次运行被强制终止（断电/蓝屏/强杀）\n本次启动未发现中断的上传任务\n建议检查电脑供电稳定性".to_string()
+                        };
+                        crate::utils::log::log(&format!("异常退出告警已触发: total={}", total));
+                        append_log("startup.log", &format!("异常退出告警: {}", reason.replace('\n', " | ")));
+
+                        let config = qm_for_recover.config.read().await;
+                        if let Some(notification) = &config.upload.notification {
+                            if notification.enabled && !notification.webhook_url.is_empty() {
+                                crate::services::upload_scheduler::UploadScheduler::send_text_notification(notification, &reason).await;
+                            }
+                        }
+                    } else if total > 0 {
+                        // 正常退出但有中断任务（理论上正常退出时任务会保存好，保险起见仍通知）
                         let config = qm_for_recover.config.read().await;
                         if let Some(notification) = &config.upload.notification {
                             if notification.enabled && !notification.webhook_url.is_empty() {
@@ -345,6 +404,7 @@ pub fn run() {
 
     app.run(|_app_handle, event| {
         if let tauri::RunEvent::Exit = event {
+            clear_running_marker();
             let config = Storage::load_config().unwrap_or_default();
             crate::services::log_sync::sync_on_exit_blocking(&config.log_sync);
             kill_alist_on_exit();
