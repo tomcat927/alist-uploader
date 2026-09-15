@@ -388,8 +388,15 @@ pub struct LogSyncConfig {
     pub target_path: String,
     #[serde(default = "default_true")]
     pub sync_on_exit: bool,
+    /// 定时同步间隔（分钟），0 表示关闭定时同步
+    #[serde(default = "default_log_sync_interval")]
+    pub sync_interval_minutes: u32,
     #[serde(default)]
     pub use_system_proxy: bool,
+}
+
+fn default_log_sync_interval() -> u32 {
+    30
 }
 
 fn default_log_sync_target_path() -> String {
@@ -406,6 +413,7 @@ impl Default for LogSyncConfig {
             token: String::new(),
             target_path: default_log_sync_target_path(),
             sync_on_exit: true,
+            sync_interval_minutes: default_log_sync_interval(),
             use_system_proxy: false,
         }
     }

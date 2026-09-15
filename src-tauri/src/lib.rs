@@ -134,6 +134,18 @@ pub fn run() {
         .setup(move |app| {
             append_log("startup.log", "tauri setup begin");
             crate::utils::log::log("tauri setup begin; schedule manager starting");
+
+            // 日志定时同步
+            {
+                let qm_for_logsync = qm_for_setup.clone_inner();
+                let config = qm_for_logsync.config.blocking_read();
+                let log_sync_config = config.log_sync.clone();
+                drop(config);
+                if crate::services::log_sync::spawn_interval_sync(log_sync_config).is_some() {
+                    append_log("startup.log", "日志定时同步已启动");
+                }
+            }
+
             let schedule_manager = crate::services::schedule_manager::ScheduleManager::new(qm_for_setup.clone_inner());
             tauri::async_runtime::spawn(async move {
                 append_log("startup.log", "schedule monitor started");

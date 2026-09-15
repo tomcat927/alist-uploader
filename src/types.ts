@@ -119,6 +119,7 @@ export interface LogSyncConfig {
   token: string;
   target_path: string;
   sync_on_exit: boolean;
+  sync_interval_minutes: number;
   use_system_proxy: boolean;
 }
 
@@ -204,6 +205,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     token: '',
     target_path: '/本地磁盘/alist-uploader-logs',
     sync_on_exit: true,
+    sync_interval_minutes: 30,
     use_system_proxy: false,
   },
 };

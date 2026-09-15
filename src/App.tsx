@@ -2107,6 +2107,20 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     />
                     <label htmlFor="logSyncOnExit">退出程序时自动同步日志</label>
                   </div>
+                  <div className="form-group">
+                    <label>定时同步间隔（分钟）:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="1440"
+                      value={configForm.log_sync?.sync_interval_minutes ?? 30}
+                      onChange={(e) => setConfigForm({
+                        ...configForm,
+                        log_sync: { ...configForm.log_sync!, sync_interval_minutes: parseInt(e.target.value) || 0 }
+                      })}
+                    />
+                    <span className="field-hint">0 = 关闭定时同步；30 = 每 30 分钟自动同步一次。断电/崩溃时最多丢失一个间隔内的日志</span>
+                  </div>
                   <div className="form-group checkbox-group">
                     <input
                       type="checkbox"

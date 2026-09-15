@@ -334,3 +334,27 @@ pub fn sync_on_exit_blocking(config: &LogSyncConfig) {
     let result = runtime.block_on(sync_logs(config));
     log(&format!("退出时日志同步完成: total={}, success={}, failed={}", result.total, result.success, result.failed));
 }
+
+/// 启动定时同步后台任务（每隔 N 分钟同步一次日志）
+/// 返回 None 表示未启用（enabled=false 或 interval=0）
+pub fn spawn_interval_sync(config: LogSyncConfig) -> Option<()> {
+    if !config.enabled || config.sync_interval_minutes == 0 || config.base_url.is_empty() {
+        return None;
+    }
+
+    let interval_secs = (config.sync_interval_minutes as u64) * 60;
+    log(&format!("启动日志定时同步: interval={}s, target={}", interval_secs, config.target_path));
+
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+            log("定时同步日志触发");
+            let result = sync_logs(&config).await;
+            if result.failed > 0 {
+                log(&format!("定时日志同步有失败: success={}, failed={}", result.success, result.failed));
+            }
+        }
+    });
+
+    Some(())
+}
