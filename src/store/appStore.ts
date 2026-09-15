@@ -170,6 +170,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       const serviceAvailable = await invoke<boolean>('check_health', { config: state.config });
 
+      // 同步后端上传状态（定时上传/异常自愈场景后端可能自行启动调度器）
+      try {
+        const backendUploading = await invoke<boolean>('get_is_uploading');
+        if (backendUploading !== state.isUploading) {
+          set({ isUploading: backendUploading });
+        }
+      } catch {
+        // 忽略状态同步失败
+      }
+
       if (serviceAvailable) {
         const loggedIn = await invoke<boolean>('test_alist_connection', { config: state.config });
         set({ alistServiceAvailable: true, alistConnected: loggedIn, alistChecking: false });

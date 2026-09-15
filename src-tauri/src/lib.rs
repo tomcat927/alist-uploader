@@ -216,54 +216,105 @@ pub fn run() {
                 append_log("startup.log", "exe_path 为空，跳过自动启动");
             }
 
-            // 恢复中断任务：上次异常退出时 uploading 状态的任务检查是否已在 Alist 上完成
+            // 恢复中断任务：上次异常退出时中断的任务，等 Alist 就绪后检查是否已传完，
+            // 传完的入历史，未传完的重新排队；异常退出场景自动恢复上传调度器
             {
                 let qm_for_recover = qm_for_setup.clone_inner();
                 let was_abnormal = abnormal_for_setup;
                 tauri::async_runtime::spawn(async move {
-                    let mut queue = qm_for_recover.queue.write().await;
-                    let config = qm_for_recover.config.read().await;
-                    let alist_base_url = config.alist.base_url.clone();
-                    let alist_token = config.alist.token.clone();
-                    let use_proxy = config.alist.use_system_proxy;
-                    drop(config);
+                    const INTERRUPTED_MARKER: &str = "上传中断";
+
+                    let is_interrupted = |t: &crate::models::UploadTask| {
+                        t.status == crate::models::TaskStatus::Uploading
+                            || (t.status == crate::models::TaskStatus::Failed
+                                && t.error.as_deref().map_or(false, |e| e.contains(INTERRUPTED_MARKER)))
+                    };
+
+                    // 找出中断任务
+                    let has_interrupted = {
+                        let queue = qm_for_recover.queue.read().await;
+                        queue.tasks.iter().any(|t| is_interrupted(t))
+                    };
+
+                    if !has_interrupted && !was_abnormal {
+                        return;
+                    }
+
+                    // 有中断任务时等待 Alist 就绪（最多 60 秒），确保 check_file_exists 可靠
+                    let (alist_base_url, alist_token, use_proxy) = {
+                        let config = qm_for_recover.config.read().await;
+                        (config.alist.base_url.clone(), config.alist.token.clone(), config.alist.use_system_proxy)
+                    };
+
+                    let mut alist_ready = false;
+                    if has_interrupted {
+                        let ping_client = reqwest::Client::new();
+                        for _ in 0..30 {
+                            let ok = ping_client
+                                .get(format!("{}/ping", alist_base_url.trim_end_matches('/')))
+                                .timeout(std::time::Duration::from_secs(2))
+                                .send()
+                                .await
+                                .map(|r| r.status().is_success())
+                                .unwrap_or(false);
+                            if ok {
+                                alist_ready = true;
+                                break;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        }
+                        crate::utils::log::log(&format!("中断任务恢复检查: alist_ready={}", alist_ready));
+                    }
 
                     let alist_client = crate::services::alist_client::AlistClient::new(alist_base_url, alist_token, use_proxy);
-                    let mut recovered = 0;
-                    let mut skipped = 0;
-                    for task in queue.tasks.iter_mut() {
-                        if task.status == crate::models::TaskStatus::Uploading {
+                    let mut recovered = 0usize;
+                    let mut skipped = 0usize;
+                    let mut skip_ids: Vec<String> = Vec::new();
+                    {
+                        let mut queue = qm_for_recover.queue.write().await;
+                        for task in queue.tasks.iter_mut() {
+                            if !is_interrupted(task) {
+                                continue;
+                            }
                             append_log("startup.log", &format!("恢复中断任务: file={}, alist_path={}", task.file.name, task.alist_path));
 
-                            // 检查文件是否已在 Alist 上存在
-                            let exists = alist_client.check_file_exists(&task.alist_path, &task.file.name).await.unwrap_or(false);
-                            if exists {
-                                append_log("startup.log", &format!("文件已在 Alist 上存在，跳过: file={}", task.file.name));
-                                task.status = crate::models::TaskStatus::Completed;
-                                task.progress = 100;
-                                task.speed = 0;
-                                skipped += 1;
-                            } else {
-                                task.status = crate::models::TaskStatus::Pending;
-                                task.progress = 0;
-                                task.speed = 0;
-                                recovered += 1;
+                            if alist_ready {
+                                // 检查文件是否已在 Alist 上传完成
+                                let exists = alist_client.check_file_exists(&task.alist_path, &task.file.name).await.unwrap_or(false);
+                                if exists {
+                                    append_log("startup.log", &format!("文件已在 Alist 上存在，跳过: file={}", task.file.name));
+                                    task.mark_completed();
+                                    let done = task.clone();
+                                    let _ = qm_for_recover.add_to_history(done).await;
+                                    skip_ids.push(task.id.clone());
+                                    skipped += 1;
+                                    continue;
+                                }
                             }
+
+                            // 未传完，重新排队
+                            task.status = crate::models::TaskStatus::Pending;
+                            task.error = None;
+                            task.progress = 0;
+                            task.speed = 0;
+                            recovered += 1;
                         }
-                    }
-                    let total = recovered + skipped;
-                    if total > 0 {
-                        append_log("startup.log", &format!("共恢复 {} 个中断任务（{} 个重新上传，{} 个已存在跳过）", total, recovered, skipped));
-                        crate::utils::log::log(&format!("检测到 {} 个上次中断的上传任务（{} 个重新上传，{} 个已存在跳过）", total, recovered, skipped));
+                        if !skip_ids.is_empty() {
+                            queue.tasks.retain(|t| !skip_ids.contains(&t.id));
+                        }
                         let _ = crate::utils::storage::Storage::save_queue(&*queue);
                     }
-                    drop(queue);
 
-                    // 异常退出检测：marker 残留说明上次是断电/强杀/崩溃
+                    let total = recovered + skipped;
+                    crate::utils::log::log(&format!("中断任务恢复完成: total={}, recovered={}, skipped={}", total, recovered, skipped));
+                    append_log("startup.log", &format!("中断任务恢复: {} 个重新上传，{} 个已存在跳过", recovered, skipped));
+
+                    // 异常退出告警 + 自动恢复上传
                     if was_abnormal {
                         let reason = if total > 0 {
-                            format!("⚠️ 程序异常退出告警\n上次运行被强制终止（断电/蓝屏/强杀），中断了 {} 个上传任务\n已自动恢复: {} 个重新上传，{} 个已存在跳过\n建议检查电脑供电稳定性",
-                                total, recovered, skipped)
+                            format!("⚠️ 程序异常退出告警\n上次运行被强制终止（断电/蓝屏/强杀），中断了 {} 个上传任务\n已自动恢复: {} 个重新上传，{} 个已传完跳过\n{}",
+                                total, recovered, skipped,
+                                if recovered > 0 { "上传调度器已自动启动" } else { "无需重新上传" })
                         } else {
                             "⚠️ 程序异常退出告警\n上次运行被强制终止（断电/蓝屏/强杀）\n本次启动未发现中断的上传任务\n建议检查电脑供电稳定性".to_string()
                         };
@@ -276,12 +327,22 @@ pub fn run() {
                                 crate::services::upload_scheduler::UploadScheduler::send_text_notification(notification, &reason).await;
                             }
                         }
+
+                        // 自愈：异常退出且有任务重新排队，自动启动上传调度器
+                        if recovered > 0 {
+                            crate::utils::log::log("检测到异常退出且有待恢复任务，自动启动上传调度器");
+                            append_log("startup.log", "自愈: 自动启动上传调度器");
+                            let scheduler = crate::services::upload_scheduler::UploadScheduler::new(qm_for_recover.clone_inner());
+                            tauri::async_runtime::spawn(async move {
+                                scheduler.start_scheduler().await;
+                            });
+                        }
                     } else if total > 0 {
-                        // 正常退出但有中断任务（理论上正常退出时任务会保存好，保险起见仍通知）
+                        // 正常重启但有中断任务（如定时上传时段重启），通知但不自动启动
                         let config = qm_for_recover.config.read().await;
                         if let Some(notification) = &config.upload.notification {
                             if notification.enabled && !notification.webhook_url.is_empty() {
-                                let msg = format!("系统重启恢复通知: 检测到 {} 个中断任务，{} 个重新上传，{} 个已在 Alist 上存在自动跳过", total, recovered, skipped);
+                                let msg = format!("系统重启恢复通知: 检测到 {} 个中断任务，{} 个重新排队，{} 个已传完跳过（可在队列页手动开始上传）", total, recovered, skipped);
                                 crate::services::upload_scheduler::UploadScheduler::send_text_notification(&notification, &msg).await;
                             }
                         }
