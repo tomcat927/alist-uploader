@@ -116,7 +116,7 @@ impl QueueManager {
                     Ok(None) => {}
                     Err(message) => {
                         log(&format!("文件夹内文件被大文件保护拦截: file_path={}, file_name={}, size={}B, error={}", file_info.path, file_info.name, file_info.size, message));
-                        self.record_blocked_file(&file_info.path, &file_info.name, file_info.size, &message).await;
+                        self.record_blocked_file(&file_info.path, &file_info.name, file_info.size, &message, &folder_target).await;
                         warnings.push(message);
                         continue;
                     }
@@ -137,7 +137,7 @@ impl QueueManager {
                 Ok(None) => {}
                 Err(message) => {
                     log(&format!("单文件被大文件保护拦截: file_path={}, file_name={}, size={}B, error={}", file_path, name, size, message));
-                    self.record_blocked_file(&file_path, &name, size, &message).await;
+                    self.record_blocked_file(&file_path, &name, size, &message, &target_root).await;
                     warnings.push(message);
                     return Ok(AddToQueueResult { tasks: added_tasks, warnings });
                 }
@@ -195,6 +195,7 @@ impl QueueManager {
         file_name: &str,
         file_size: u64,
         reason: &str,
+        target_path: &str,
     ) {
         let record = BlockedFileRecord {
             file_path: file_path.to_string(),
@@ -202,6 +203,8 @@ impl QueueManager {
             file_size,
             reason: reason.to_string(),
             blocked_at: chrono::Utc::now(),
+            target_path: target_path.to_string(),
+            resolved: false,
         };
         let mut data = Storage::load_blocked_files().unwrap_or_default();
         data.records.push(record);

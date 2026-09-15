@@ -28,6 +28,8 @@ export interface BlockedFileRecord {
   file_size: number;
   reason: string;
   blocked_at: string;
+  target_path: string;
+  resolved: boolean;
 }
 
 export interface AddToQueueResult {

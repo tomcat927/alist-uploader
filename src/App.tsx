@@ -79,6 +79,7 @@ function App() {
   const [downloadSizeText, setDownloadSizeText] = useState('');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [expandedHistoryTaskId, setExpandedHistoryTaskId] = useState<string | null>(null);
+  const [expandedBlockedIndex, setExpandedBlockedIndex] = useState<number | null>(null);
   const [queueFilter, setQueueFilter] = useState<'all' | 'pending' | 'uploading'>('all');
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [queueSearchText, setQueueSearchText] = useState('');
@@ -137,6 +138,11 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
   const removeBlockedFile = async (index: number) => {
     await invoke('remove_blocked_file', { index });
+    await loadBlockedFiles();
+  };
+
+  const resolveBlockedFile = async (index: number) => {
+    await invoke('resolve_blocked_file', { index });
     await loadBlockedFiles();
   };
 
@@ -786,6 +792,8 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
       const tb = new Date(b.blocked_at).getTime();
       return blockedSortOrder === 'desc' ? tb - ta : ta - tb;
     });
+    // 已处理的记录排到后面
+    result.sort((a, b) => Number(a.resolved) - Number(b.resolved));
     return result;
   }, [blockedFiles, blockedSearchText, blockedSortOrder]);
 
@@ -1306,7 +1314,6 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 <thead>
                   <tr>
                     <th>文件名</th>
-                    <th>文件路径</th>
                     <th>文件大小</th>
                     <th>原因</th>
                     <th
@@ -1316,6 +1323,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     >
                       时间 {blockedSortOrder === 'desc' ? '▼' : '▲'}
                     </th>
+                    <th>状态</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -1323,13 +1331,39 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   {filteredBlockedFiles.map((record) => {
                     const realIndex = blockedFiles.indexOf(record);
                     return (
-                    <tr key={realIndex}>
-                      <td>{record.file_name}</td>
-                      <td title={record.file_path}>{record.file_path}</td>
+                    <Fragment key={realIndex}>
+                    <tr className={record.resolved ? 'blocked-row-resolved' : ''}>
+                      <td>
+                        <button
+                          type="button"
+                          className={`task-name-toggle ${expandedBlockedIndex === realIndex ? 'expanded' : ''}`}
+                          onClick={() => setExpandedBlockedIndex(expandedBlockedIndex === realIndex ? null : realIndex)}
+                          aria-expanded={expandedBlockedIndex === realIndex}
+                        >
+                          <span className="task-expand-icon" aria-hidden="true">▶</span>
+                          <span className="task-file-name">{record.file_name}</span>
+                        </button>
+                      </td>
                       <td>{formatFileSize(record.file_size)}</td>
-                      <td>{record.reason}</td>
+                      <td title={record.reason}>{record.reason}</td>
                       <td>{new Date(record.blocked_at).toLocaleString()}</td>
                       <td>
+                        {record.resolved ? (
+                          <span className="status-badge status-completed">已处理</span>
+                        ) : (
+                          <span className="status-badge status-pending">待处理</span>
+                        )}
+                      </td>
+                      <td>
+                        {!record.resolved && (
+                          <button
+                            onClick={() => resolveBlockedFile(realIndex)}
+                            className="small"
+                            title="已将该文件分卷压缩并重新上传"
+                          >
+                            标记已处理
+                          </button>
+                        )}
                         <button onClick={() => removeBlockedFile(realIndex)} className="small danger">
                           删除
                         </button>
@@ -1342,6 +1376,23 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                         </button>
                       </td>
                     </tr>
+                    {expandedBlockedIndex === realIndex && (
+                      <tr className="task-detail-row">
+                        <td colSpan={6}>
+                          <div className="task-path-detail">
+                            <div>
+                              <span className="task-path-label">本地路径</span>
+                              <code title={record.file_path}>{record.file_path}</code>
+                            </div>
+                            <div>
+                              <span className="task-path-label">OpenList 目标</span>
+                              <code>{record.target_path || '-'}</code>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                     );
                   })}
                 </tbody>

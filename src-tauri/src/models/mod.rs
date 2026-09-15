@@ -340,6 +340,12 @@ pub struct BlockedFileRecord {
     pub file_size: u64,
     pub reason: String,
     pub blocked_at: DateTime<Utc>,
+    /// openlist 目标路径（拦截时用户选择的目录）
+    #[serde(default)]
+    pub target_path: String,
+    /// 用户已标记为已分卷处理/已解决
+    #[serde(default)]
+    pub resolved: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

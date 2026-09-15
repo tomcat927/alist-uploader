@@ -324,6 +324,16 @@ pub async fn remove_blocked_file(index: usize) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub async fn resolve_blocked_file(index: usize) -> Result<(), String> {
+    let mut data = crate::utils::storage::Storage::load_blocked_files().map_err(|e| e.to_string())?;
+    if index < data.records.len() {
+        data.records[index].resolved = true;
+        crate::utils::storage::Storage::save_blocked_files(&data).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn clear_blocked_files() -> Result<(), String> {
     crate::utils::storage::Storage::save_blocked_files(&crate::models::BlockedFileData::default()).map_err(|e| e.to_string())?;
     Ok(())
