@@ -121,6 +121,7 @@ export interface LogSyncConfig {
   sync_on_exit: boolean;
   sync_interval_minutes: number;
   use_system_proxy: boolean;
+  last_sync_at?: string | null;
 }
 
 export interface LocalLogFileInfo {
@@ -134,6 +135,7 @@ export interface LogSyncResult {
   success: number;
   failed: number;
   details: string[];
+  last_sync_at?: string | null;
 }
 
 export interface AppConfig {
@@ -207,6 +209,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
     sync_on_exit: true,
     sync_interval_minutes: 30,
     use_system_proxy: false,
+    last_sync_at: null,
   },
 };
 

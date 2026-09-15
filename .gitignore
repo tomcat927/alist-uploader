@@ -180,3 +180,6 @@ logs
 
 # Local
 *.local
+
+# Internal docs (local only, not for remote)
+LOG_SYNC_MANUAL.md

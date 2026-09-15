@@ -393,6 +393,9 @@ pub struct LogSyncConfig {
     pub sync_interval_minutes: u32,
     #[serde(default)]
     pub use_system_proxy: bool,
+    /// 最近一次同步成功时间（RFC3339），用于前端展示
+    #[serde(default)]
+    pub last_sync_at: Option<String>,
 }
 
 fn default_log_sync_interval() -> u32 {
@@ -415,6 +418,7 @@ impl Default for LogSyncConfig {
             sync_on_exit: true,
             sync_interval_minutes: default_log_sync_interval(),
             use_system_proxy: false,
+            last_sync_at: None,
         }
     }
 }
@@ -432,6 +436,9 @@ pub struct LogSyncResult {
     pub success: usize,
     pub failed: usize,
     pub details: Vec<String>,
+    /// 最近一次同步成功时间（RFC3339），None 表示从未成功同步
+    #[serde(default)]
+    pub last_sync_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

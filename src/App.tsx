@@ -688,6 +688,12 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
         setLogSyncMessage(`同步完成: 成功 ${result.success}/${result.total}，失败 ${result.failed}`);
       }
       await writeClientLog(`日志同步结果: total=${result.total}, success=${result.success}, failed=${result.failed}`);
+      if (result.last_sync_at) {
+        setConfigForm(prev => ({
+          ...prev,
+          log_sync: { ...prev.log_sync!, last_sync_at: result.last_sync_at },
+        }));
+      }
       await loadLocalLogFiles();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -2166,6 +2172,12 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   )}
                   {logSyncStatus === 'error' && (
                     <span className="test-result error">{logSyncMessage}</span>
+                  )}
+                  {configForm.log_sync?.last_sync_at && (
+                    <div className="token-info">
+                      <span className="token-label">最近同步时间:</span>
+                      <code>{formatDateTime(configForm.log_sync.last_sync_at)}</code>
+                    </div>
                   )}
                   {configForm.log_sync?.token && (
                     <div className="token-info">

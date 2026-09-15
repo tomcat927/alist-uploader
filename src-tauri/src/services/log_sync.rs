@@ -17,6 +17,14 @@ struct LogSyncResponse<T> {
     pub data: Option<T>,
 }
 
+fn now_rfc3339() -> String {
+    chrono::Local::now().to_rfc3339()
+}
+
+fn load_last_sync_at() -> Option<String> {
+    Storage::load_config().ok()?.log_sync.last_sync_at
+}
+
 #[derive(Debug, serde::Deserialize, Default)]
 struct LogSyncLoginResp {
     pub token: String,
@@ -240,7 +248,7 @@ pub async fn sync_logs(config: &LogSyncConfig) -> LogSyncResult {
 
     if config.base_url.is_empty() {
         details.push("日志Alist地址为空，请先配置".to_string());
-        return LogSyncResult { total: 0, success: 0, failed: 0, details };
+        return LogSyncResult { total: 0, success: 0, failed: 0, details, last_sync_at: load_last_sync_at() };
     }
 
     let client = LogSyncClient::new(config);
@@ -258,7 +266,7 @@ pub async fn sync_logs(config: &LogSyncConfig) -> LogSyncResult {
             }
             Err(e) => {
                 details.push(format!("登录失败: {}", e));
-                return LogSyncResult { total: 0, success: 0, failed: 0, details };
+                return LogSyncResult { total: 0, success: 0, failed: 0, details, last_sync_at: load_last_sync_at() };
             }
         }
     }
@@ -273,14 +281,14 @@ async fn sync_logs_with_client(client: &LogSyncClient, config: &LogSyncConfig) -
 
     if let Err(e) = client.ensure_dir(&target_path).await {
         details.push(format!("创建目录失败: {}", e));
-        return LogSyncResult { total: 0, success: 0, failed: 0, details };
+        return LogSyncResult { total: 0, success: 0, failed: 0, details, last_sync_at: load_last_sync_at() };
     }
 
     let local_files = get_local_log_files_list();
     let total = local_files.len();
     if total == 0 {
         details.push("未找到本地日志文件".to_string());
-        return LogSyncResult { total: 0, success: 0, failed: 0, details };
+        return LogSyncResult { total: 0, success: 0, failed: 0, details, last_sync_at: load_last_sync_at() };
     }
 
     let mut success = 0usize;
@@ -306,7 +314,20 @@ async fn sync_logs_with_client(client: &LogSyncClient, config: &LogSyncConfig) -
     }
 
     log(&format!("日志同步完成: total={}, success={}, failed={}", total, success, failed));
-    LogSyncResult { total, success, failed, details }
+
+    // 持久化最近一次成功同步时间
+    let last_sync_at = if success > 0 {
+        let ts = now_rfc3339();
+        if let Ok(mut config) = Storage::load_config() {
+            config.log_sync.last_sync_at = Some(ts.clone());
+            let _ = Storage::save_config(&config);
+        }
+        Some(ts)
+    } else {
+        load_last_sync_at()
+    };
+
+    LogSyncResult { total, success, failed, details, last_sync_at }
 }
 
 pub fn get_local_log_files() -> Vec<LocalLogFileInfo> {
