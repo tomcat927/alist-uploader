@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AddToQueueResult, type UploadTask, type AppConfig, type TaskStatus } from '../types';
+import { DEFAULT_APP_CONFIG, normalizeAppConfig, type AddToQueueResult, type UploadTask, type AppConfig, type TaskStatus, type HistoryPage } from '../types';
 
 interface AppState {
   queue: UploadTask[];
   history: UploadTask[];
+  historyPage: HistoryPage | null;
   config: AppConfig;
   isUploading: boolean;
   isLoading: boolean;
@@ -20,6 +21,7 @@ interface AppState {
   removeFromQueue: (taskId: string) => Promise<void>;
   clearQueue: () => Promise<void>;
   loadHistory: () => Promise<void>;
+  loadHistoryPage: (page: number, pageSize: number, statusFilter: string, searchText: string, sortOrder: string) => Promise<void>;
   clearHistory: () => Promise<void>;
   loadConfig: () => Promise<void>;
   saveConfig: (config: AppConfig) => Promise<void>;
@@ -41,6 +43,7 @@ let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
 export const useAppStore = create<AppState>((set, get) => ({
   queue: [],
   history: [],
+  historyPage: null,
   config: DEFAULT_APP_CONFIG,
   isUploading: false,
   isLoading: true,
@@ -81,6 +84,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   loadHistory: async () => {
     const history = await invoke<UploadTask[]>('get_history');
     set({ history });
+  },
+
+  loadHistoryPage: async (page, pageSize, statusFilter, searchText, sortOrder) => {
+    const result = await invoke<HistoryPage>('get_history_page', {
+      page,
+      pageSize,
+      statusFilter: statusFilter || null,
+      searchText: searchText || null,
+      sortOrder: sortOrder || null,
+    });
+    set({ historyPage: result, history: result.tasks });
   },
 
   clearHistory: async () => {

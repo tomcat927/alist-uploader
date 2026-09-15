@@ -357,6 +357,9 @@ impl Default for BlockedFileData {
 pub struct HistoryConfig {
     #[serde(default = "default_history_retention_days")]
     pub retention_days: u32,
+    /// 永久保留历史记录（不按天数清理）
+    #[serde(default = "default_true")]
+    pub never_clean: bool,
 }
 
 fn default_history_retention_days() -> u32 {
@@ -365,7 +368,7 @@ fn default_history_retention_days() -> u32 {
 
 impl Default for HistoryConfig {
     fn default() -> Self {
-        Self { retention_days: 30 }
+        Self { retention_days: 30, never_clean: true }
     }
 }
 
@@ -421,6 +424,15 @@ pub struct LogSyncResult {
     pub success: usize,
     pub failed: usize,
     pub details: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryPage {
+    pub tasks: Vec<UploadTask>,
+    pub total: usize,
+    pub page: usize,
+    pub page_size: usize,
+    pub total_pages: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

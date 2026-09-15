@@ -308,6 +308,7 @@ pub fn run() {
             crate::commands::remove_from_queue,
             crate::commands::clear_queue,
             crate::commands::get_history,
+           crate::commands::get_history_page,
             crate::commands::clear_history,
             crate::commands::get_config,
             crate::commands::save_config,

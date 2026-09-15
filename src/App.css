@@ -1406,3 +1406,27 @@ td:has(> .task-file-name) {
   border-bottom: none;
 }
 
+.history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+}
+
+.history-pagination button {
+  padding: 0.35rem 1rem;
+  font-size: 0.85rem;
+}
+
+.history-pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+

@@ -311,14 +311,18 @@ impl QueueManager {
         history.records.retain(|r| !(r.file.path == task.file.path && r.alist_path == task.alist_path));
         history.records.insert(0, task);
         
-        // 按保留天数清理过期记录
+        // 按保留天数清理过期记录（never_clean 开启时跳过）
         let config = self.config.read().await;
+        let never_clean = config.history.never_clean;
         let retention_days = config.history.retention_days;
-        let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days as i64);
-        history.records.retain(|r| {
-            let ts = r.end_time.unwrap_or(r.created_at);
-            ts > cutoff
-        });
+        drop(config);
+        if !never_clean {
+            let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days as i64);
+            history.records.retain(|r| {
+                let ts = r.end_time.unwrap_or(r.created_at);
+                ts > cutoff
+            });
+        }
         
         Storage::save_history(&*history)?;
         Ok(())

@@ -100,6 +100,15 @@ export interface UploadConfig {
 
 export interface HistoryConfig {
   retention_days: number;
+  never_clean: boolean;
+}
+
+export interface HistoryPage {
+  tasks: UploadTask[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
 }
 
 export interface LogSyncConfig {
@@ -185,6 +194,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   },
   history: {
     retention_days: 30,
+    never_clean: true,
   },
   log_sync: {
     enabled: false,
@@ -222,7 +232,7 @@ export const normalizeAppConfig = (config?: Partial<AppConfig> | null): AppConfi
   history: {
     ...DEFAULT_APP_CONFIG.history,
     ...config?.history,
-  },
+  } as HistoryConfig,
   log_sync: {
     ...DEFAULT_APP_CONFIG.log_sync,
     ...config?.log_sync,

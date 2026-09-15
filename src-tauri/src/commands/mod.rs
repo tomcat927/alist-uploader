@@ -51,6 +51,48 @@ pub async fn get_history(queue_manager: State<'_, QueueManager>) -> Result<Vec<U
 }
 
 #[tauri::command]
+pub async fn get_history_page(
+    queue_manager: State<'_, QueueManager>,
+    page: usize,
+    page_size: usize,
+    status_filter: Option<String>,
+    search_text: Option<String>,
+    sort_order: Option<String>,
+) -> Result<HistoryPage, String> {
+    let history = queue_manager.history.read().await;
+    let mut records: Vec<UploadTask> = history.records.clone();
+    drop(history);
+
+    if let Some(ref filter) = status_filter {
+        if filter != "all" {
+            records.retain(|t| filter == "completed" && t.status == TaskStatus::Completed
+                || filter == "failed" && t.status == TaskStatus::Failed);
+        }
+    }
+
+    if let Some(ref text) = search_text {
+        let q = text.trim().to_lowercase();
+        if !q.is_empty() {
+            records.retain(|t| t.file.name.to_lowercase().contains(&q));
+        }
+    }
+
+    records.sort_by(|a, b| {
+        let ta = a.end_time.unwrap_or(a.created_at);
+        let tb = b.end_time.unwrap_or(b.created_at);
+        if sort_order.as_deref() == Some("asc") { ta.cmp(&tb) } else { tb.cmp(&ta) }
+    });
+
+    let total = records.len();
+    let page_size = page_size.max(1);
+    let total_pages = (total + page_size - 1) / page_size;
+    let start = page.saturating_sub(1) * page_size;
+    let tasks: Vec<UploadTask> = records.into_iter().skip(start).take(page_size).collect();
+
+    Ok(HistoryPage { tasks, total, page, page_size, total_pages })
+}
+
+#[tauri::command]
 pub async fn clear_history(queue_manager: State<'_, QueueManager>) -> Result<(), String> {
     queue_manager
         .clear_history()

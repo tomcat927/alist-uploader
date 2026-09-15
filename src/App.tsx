@@ -16,6 +16,7 @@ function App() {
   const {
     queue,
     history,
+    historyPage,
     config,
     configLoaded,
     isUploading,
@@ -29,6 +30,7 @@ function App() {
     removeFromQueue,
     clearQueue,
     loadHistory,
+    loadHistoryPage,
     clearHistory,
     loadConfig,
     saveConfig,
@@ -87,6 +89,8 @@ function App() {
   const [historyFilter, setHistoryFilter] = useState<'all' | 'completed' | 'failed'>('all');
   const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc');
   const [historySearchText, setHistorySearchText] = useState('');
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [historyPageSize] = useState(50);
   const [historyRetryStatus, setHistoryRetryStatus] = useState<Record<string, 'idle' | 'queued' | 'error'>>({});
   const [appVersion, setAppVersion] = useState('');
   const [shutdownDeadline, setShutdownDeadline] = useState<string | null>(null);
@@ -122,6 +126,15 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     }
   };
 
+  const fetchHistoryPage = useCallback(async (page: number, filter: string, search: string, sort: string) => {
+    try {
+      await loadHistoryPage(page, historyPageSize, filter, search, sort);
+      setHistoryCurrentPage(page);
+    } catch (error) {
+      console.error('Failed to load history page:', error);
+    }
+  }, [loadHistoryPage, historyPageSize]);
+
   const removeBlockedFile = async (index: number) => {
     await invoke('remove_blocked_file', { index });
     await loadBlockedFiles();
@@ -156,7 +169,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     loadQueue();
-    loadHistory();
+    fetchHistoryPage(1, 'all', '', 'desc');
     loadBlockedFiles();
     loadConfig();
     invoke<LocalLogFileInfo[]>('get_local_log_files').then(setLocalLogFiles).catch(() => {});
@@ -322,7 +335,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     const intervalId = window.setInterval(async () => {
       try {
         await loadQueue();
-        await loadHistory();
+        await fetchHistoryPage(historyCurrentPage, historyFilter, historySearchText, historySortOrder);
         const latestQueue = useAppStore.getState().queue;
         const backendUploading = await invoke<boolean>('get_is_uploading');
        if (!backendUploading) {
@@ -360,7 +373,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     }, 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [isUploading, loadQueue, loadHistory, setIsUploading]);
+  }, [isUploading, loadQueue, historyCurrentPage, historyFilter, historySearchText, historySortOrder, fetchHistoryPage, setIsUploading]);
 
   // 关机倒计时
   useEffect(() => {
@@ -720,7 +733,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     .reduce((sum, t) => sum + (t.speed || 0), 0);
 
   const historyStats = useMemo(() => {
-    const total = history.length;
+    const total = historyPage?.total ?? history.length;
     const completed = history.filter(t => t.status === 'completed');
     const failed = history.filter(t => t.status === 'failed');
     const successRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
@@ -738,25 +751,12 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
     const avgSpeed = totalDuration > 0 ? totalBytes / totalDuration : 0;
 
     return { total, completed: completed.length, failed: failed.length, successRate, totalBytes, monthBytes, avgSpeed };
-  }, [history]);
+  }, [history, historyPage]);
 
   const formatDateTime = (isoString?: string) => {
     if (!isoString) return '-';
     return new Date(isoString).toLocaleString('zh-CN');
   };
-  const filteredHistory = useMemo(() => {
-    let result = historyFilter === 'all' ? history : history.filter(t => t.status === historyFilter);
-    if (historySearchText.trim()) {
-      const q = historySearchText.trim().toLowerCase();
-      result = result.filter(t => t.file.name.toLowerCase().includes(q));
-    }
-    result = [...result].sort((a, b) => {
-      const ta = a.end_time ? new Date(a.end_time).getTime() : 0;
-      const tb = b.end_time ? new Date(b.end_time).getTime() : 0;
-      return historySortOrder === 'desc' ? tb - ta : ta - tb;
-    });
-    return result;
-  }, [history, historyFilter, historySortOrder, historySearchText]);
 
   const hasRootTargetInQueue = queue.some(task => isRootAlistPath(task.alist_path));
 
@@ -1088,23 +1088,23 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                 <button
                   type="button"
                   className={historyFilter === 'all' ? 'active' : ''}
-                  onClick={() => setHistoryFilter('all')}
+                  onClick={() => { setHistoryFilter('all'); fetchHistoryPage(1, 'all', historySearchText, historySortOrder); }}
                 >
-                  全部 ({history.length})
+                  全部 ({historyPage?.total ?? 0})
                 </button>
                 <button
                   type="button"
                   className={historyFilter === 'completed' ? 'active' : ''}
-                  onClick={() => setHistoryFilter('completed')}
+                  onClick={() => { setHistoryFilter('completed'); fetchHistoryPage(1, 'completed', historySearchText, historySortOrder); }}
                 >
-                  成功 ({history.filter(t => t.status === 'completed').length})
+                  成功 ({historyPage ? '↓' : '0'})
                 </button>
                 <button
                   type="button"
                   className={historyFilter === 'failed' ? 'active' : ''}
-                  onClick={() => setHistoryFilter('failed')}
+                  onClick={() => { setHistoryFilter('failed'); fetchHistoryPage(1, 'failed', historySearchText, historySortOrder); }}
                 >
-                  失败 ({history.filter(t => t.status === 'failed').length})
+                  失败 ({historyPage ? '↓' : '0'})
                 </button>
               </div>
               <div className="history-search-wrapper">
@@ -1113,14 +1113,21 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   placeholder="搜索文件名..."
                   value={historySearchText}
                   onChange={(e) => setHistorySearchText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Escape' && historySearchText) { e.preventDefault(); setHistorySearchText(''); } }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { fetchHistoryPage(1, historyFilter, historySearchText, historySortOrder); }
+                    if (e.key === 'Escape' && historySearchText) {
+                      e.preventDefault();
+                      setHistorySearchText('');
+                      fetchHistoryPage(1, historyFilter, '', historySortOrder);
+                    }
+                  }}
                   className="history-search-input"
                 />
                 {historySearchText && (
                   <button
                     type="button"
                     className="history-search-clear"
-                    onClick={() => setHistorySearchText('')}
+                    onClick={() => { setHistorySearchText(''); fetchHistoryPage(1, historyFilter, '', historySortOrder); }}
                     title="清空搜索内容"
                     aria-label="清空搜索内容"
                   >
@@ -1133,7 +1140,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
               </button>
             </div>
 
-            {history.length > 0 && (
+            {historyPage && historyPage.total > 0 && (
               <div className="history-stats">
                 <div className="stat-card">
                   <span className="stat-value">{historyStats.total}</span>
@@ -1159,9 +1166,9 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
             )}
 
             <div className="history-list">
-              {filteredHistory.length === 0 ? (
+              {history.length === 0 ? (
                 <div className="empty-state">
-                  <p>{history.length === 0 ? '暂无历史记录' : '当前筛选下暂无历史记录'}</p>
+                  <p>{(historyPage?.total ?? 0) === 0 ? '暂无历史记录' : '当前筛选下暂无历史记录'}</p>
                 </div>
               ) : (
                 <table>
@@ -1172,7 +1179,11 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                       <th>目标路径</th>
                       <th>状态</th>
                       <th
-                        onClick={() => setHistorySortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                        onClick={() => {
+                          const next = historySortOrder === 'desc' ? 'asc' : 'desc';
+                          setHistorySortOrder(next);
+                          fetchHistoryPage(historyCurrentPage, historyFilter, historySearchText, next);
+                        }}
                         style={{ cursor: 'pointer', userSelect: 'none' }}
                         title="点击切换排序"
                       >
@@ -1183,7 +1194,7 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredHistory.map(task => (
+                    {history.map(task => (
                       <Fragment key={task.id}>
                         <tr
                           onClick={() => setExpandedHistoryTaskId(expandedHistoryTaskId === task.id ? null : task.id)}
@@ -1241,6 +1252,27 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                     ))}
                   </tbody>
                 </table>
+              )}
+              {historyPage && historyPage.total_pages > 1 && (
+                <div className="history-pagination">
+                  <button
+                    type="button"
+                    disabled={historyCurrentPage <= 1}
+                    onClick={() => fetchHistoryPage(historyCurrentPage - 1, historyFilter, historySearchText, historySortOrder)}
+                  >
+                    上一页
+                  </button>
+                  <span className="pagination-info">
+                    第 {historyCurrentPage} / {historyPage.total_pages} 页（共 {historyPage.total} 条）
+                  </span>
+                  <button
+                    type="button"
+                    disabled={historyCurrentPage >= historyPage.total_pages}
+                    onClick={() => fetchHistoryPage(historyCurrentPage + 1, historyFilter, historySearchText, historySortOrder)}
+                  >
+                    下一页
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1958,6 +1990,18 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
 
             <div className="settings-section">
               <h3>历史记录</h3>
+              <div className="form-group checkbox-group">
+                <input
+                  type="checkbox"
+                  id="historyNeverClean"
+                  checked={configForm.history.never_clean}
+                  onChange={(e) => setConfigForm({
+                    ...configForm,
+                    history: { ...configForm.history, never_clean: e.target.checked }
+                  })}
+                />
+                <label htmlFor="historyNeverClean">永久保留历史记录（不按天数清理）</label>
+              </div>
               <div className="form-group">
                 <label>历史记录保留天数:</label>
                 <input
@@ -1965,11 +2009,13 @@ const historyRetryTimerRef = useRef<Record<string, number>>({});
                   min="1"
                   max="365"
                   value={configForm.history.retention_days}
+                  disabled={configForm.history.never_clean}
                   onChange={(e) => setConfigForm({
                     ...configForm,
                     history: { ...configForm.history, retention_days: parseInt(e.target.value) || 30 }
                   })}
                 />
+                <span className="field-hint">开启永久保留后此选项不生效</span>
               </div>
             </div>
 
