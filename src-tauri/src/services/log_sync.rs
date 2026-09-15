@@ -345,7 +345,7 @@ pub fn spawn_interval_sync(config: LogSyncConfig) -> Option<()> {
     let interval_secs = (config.sync_interval_minutes as u64) * 60;
     log(&format!("启动日志定时同步: interval={}s, target={}", interval_secs, config.target_path));
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
             log("定时同步日志触发");
